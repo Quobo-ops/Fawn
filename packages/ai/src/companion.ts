@@ -28,7 +28,7 @@ export interface CompanionEngineOptions {
 }
 
 const DEFAULT_OPTIONS: Required<CompanionEngineOptions> = {
-  model: 'claude-sonnet-4-20250514',
+  model: 'claude-opus-4-20250514',
   maxTokens: 500, // Keep SMS-appropriate
   temperature: 0.7,
 };

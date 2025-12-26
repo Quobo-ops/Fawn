@@ -4,11 +4,30 @@ import * as schema from './schema';
 
 export * from './schema';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+// Lazy initialization - pool is created on first use after env vars are loaded
+let pool: Pool | null = null;
+let dbInstance: ReturnType<typeof drizzle> | null = null;
 
-export const db = drizzle(pool, { schema });
+function getPool(): Pool {
+  if (!pool) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+    });
+  }
+  return pool;
+}
+
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_, prop) {
+    if (!dbInstance) {
+      dbInstance = drizzle(getPool(), { schema });
+    }
+    return (dbInstance as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
 
 export type Database = typeof db;
 
@@ -21,7 +40,7 @@ export async function searchMemoriesByEmbedding(
 ) {
   const embeddingString = `[${embedding.join(',')}]`;
 
-  const result = await pool.query(`
+  const result = await getPool().query(`
     SELECT
       id, content, category, importance, metadata, tags,
       1 - (embedding::vector <=> $1::vector) as similarity
@@ -42,7 +61,7 @@ export async function searchMemoriesByText(
   query: string,
   limit: number = 10
 ) {
-  const result = await pool.query(`
+  const result = await getPool().query(`
     SELECT id, content, category, importance, metadata, tags
     FROM memories
     WHERE user_id = $1

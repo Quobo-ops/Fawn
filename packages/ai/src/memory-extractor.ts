@@ -40,7 +40,7 @@ export async function extractMemories(
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-opus-4-20250514',
       max_tokens: 1024,
       system: EXTRACTION_PROMPT,
       messages: [
@@ -114,7 +114,7 @@ Respond with JSON: { "supersedes": ["id1"], "contradicts": ["id2"], "relatedTo":
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-opus-4-20250514',
       max_tokens: 256,
       messages: [{ role: 'user', content: prompt }],
     });

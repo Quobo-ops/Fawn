@@ -176,18 +176,24 @@ async function buildUserContext(
     timestamp: m.createdAt,
   }));
 
-  // Search for relevant memories
+  // Search for relevant memories (only if embeddings are available)
   let relevantMemories: MemoryContext[] = [];
   try {
     const queryEmbedding = await generateEmbedding(currentMessage);
-    const similarMemories = await searchMemoriesByEmbedding(userId, queryEmbedding, 5, 0.6);
-    relevantMemories = similarMemories.map((m) => ({
-      id: m.id,
-      content: m.content,
-      category: m.category,
-      importance: m.importance,
-      relevanceScore: m.similarity,
-    }));
+    console.log(`[DEBUG] Embedding result: length=${queryEmbedding?.length}, type=${typeof queryEmbedding}, first3=${JSON.stringify(queryEmbedding?.slice(0, 3))}`);
+    // Only search if we got a valid embedding with actual dimensions
+    if (queryEmbedding && Array.isArray(queryEmbedding) && queryEmbedding.length > 0 && typeof queryEmbedding[0] === 'number') {
+      const similarMemories = await searchMemoriesByEmbedding(userId, queryEmbedding, 5, 0.6);
+      relevantMemories = similarMemories.map((m) => ({
+        id: m.id,
+        content: m.content,
+        category: m.category,
+        importance: m.importance,
+        relevanceScore: m.similarity,
+      }));
+    } else {
+      console.log('[DEBUG] Skipping memory search - invalid embedding');
+    }
   } catch (error) {
     console.error('Memory search failed:', error);
   }

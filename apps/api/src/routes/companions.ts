@@ -113,20 +113,20 @@ companionsRouter.patch('/', async (req, res) => {
 
     // Merge personality and communication style with existing
     const updatedPersonality = data.personality
-      ? { ...(existing.personality as object), ...data.personality }
+      ? { ...(existing.personality as unknown as Record<string, unknown>), ...data.personality }
       : existing.personality;
 
     const updatedCommunicationStyle = data.communicationStyle
-      ? { ...(existing.communicationStyle as object), ...data.communicationStyle }
+      ? { ...(existing.communicationStyle as unknown as Record<string, unknown>), ...data.communicationStyle }
       : existing.communicationStyle;
 
     await db.update(companions)
       .set({
         name: data.name ?? existing.name,
         pronouns: data.pronouns ?? existing.pronouns,
-        personality: updatedPersonality,
+        personality: updatedPersonality as typeof existing.personality,
         rules: data.rules ?? existing.rules,
-        communicationStyle: updatedCommunicationStyle,
+        communicationStyle: updatedCommunicationStyle as typeof existing.communicationStyle,
         customInstructions: data.customInstructions ?? existing.customInstructions,
         updatedAt: new Date(),
       })

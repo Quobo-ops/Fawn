@@ -1,19 +1,29 @@
 import Twilio from 'twilio';
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
+// Lazy initialization - client is created on first use after env vars are loaded
+let twilioClient: ReturnType<typeof Twilio> | null = null;
 
-if (!accountSid || !authToken) {
-  console.warn('Twilio credentials not configured');
-}
-
-export const twilioClient = accountSid && authToken
-  ? Twilio(accountSid, authToken)
-  : null;
-
-export function requireTwilioClient() {
-  if (!twilioClient) {
-    throw new Error('Twilio client not initialized. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.');
+function getClient(): ReturnType<typeof Twilio> | null {
+  if (twilioClient) return twilioClient;
+  
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  
+  if (!accountSid || !authToken) {
+    return null;
   }
+  
+  twilioClient = Twilio(accountSid, authToken);
   return twilioClient;
 }
+
+export function requireTwilioClient() {
+  const client = getClient();
+  if (!client) {
+    throw new Error('Twilio client not initialized. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.');
+  }
+  return client;
+}
+
+// For backwards compatibility
+export { twilioClient };

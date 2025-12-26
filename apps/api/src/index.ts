@@ -1,3 +1,24 @@
+import { config } from 'dotenv';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
+
+// Load environment variables from root .env
+// Try multiple paths to find .env in monorepo structure
+const possiblePaths = [
+  resolve(process.cwd(), '.env'),           // If running from root
+  resolve(process.cwd(), '../../.env'),     // If running from apps/api
+  resolve(__dirname, '../../../.env'),      // Relative to source file
+  resolve(__dirname, '../../../../.env'),   // If in dist folder
+];
+
+for (const envPath of possiblePaths) {
+  if (existsSync(envPath)) {
+    config({ path: envPath });
+    console.log(`Loaded .env from: ${envPath}`);
+    break;
+  }
+}
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
