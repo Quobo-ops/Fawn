@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { db, users, assignedPhoneNumbers, conversations, messages, companions, memories, searchMemoriesByEmbedding } from '@fawn/database';
 import { parseIncomingSms, sendSms } from '@fawn/sms';
-import { CompanionEngine, generateEmbedding, serializeEmbedding } from '@fawn/ai';
-import type { CompanionConfig, UserContext, MemoryContext, GoalContext, MessageContext } from '@fawn/ai';
+import { CompanionEngine, generateEmbedding, serializeEmbedding, INTENTS, quickIntentMatch, detectIntent } from '@fawn/ai';
+import type { CompanionConfig, UserContext, MemoryContext, GoalContext, MessageContext, DetectedIntent } from '@fawn/ai';
 import { eq, and, desc } from 'drizzle-orm';
+import { startResearch, getLatestResearchStatus, hasActiveResearch } from './research';
 
 export const smsRouter = Router();
 
@@ -66,6 +67,98 @@ smsRouter.post('/webhook', async (req, res) => {
       fromNumber: incoming.from,
       toNumber: incoming.to,
     }).returning();
+
+    // Quick intent detection for research
+    let quickIntent = quickIntentMatch(incoming.body);
+
+    // Handle deep research requests
+    if (quickIntent?.primary === INTENTS.DEEP_RESEARCH) {
+      const topic = quickIntent.entities.topic || incoming.body;
+
+      // Check if there's already active research
+      const isResearching = await hasActiveResearch(user.id);
+      if (isResearching) {
+        const status = await getLatestResearchStatus(user.id);
+        await sendSms({
+          from: incoming.to,
+          to: incoming.from,
+          body: status.statusMessage,
+        });
+      } else {
+        // Start new research
+        const { confirmationMessage } = await startResearch({
+          userId: user.id,
+          query: topic,
+          conversationId: conversation.id,
+          triggerMessageId: userMessage.id,
+          fromNumber: incoming.from,
+          toNumber: incoming.to,
+        });
+
+        // Store confirmation as assistant message
+        await db.insert(messages).values({
+          conversationId: conversation.id,
+          userId: user.id,
+          role: 'assistant',
+          content: confirmationMessage,
+          fromNumber: incoming.to,
+          toNumber: incoming.from,
+          processedAt: new Date(),
+          detectedIntent: INTENTS.DEEP_RESEARCH,
+          intentConfidence: Math.round(quickIntent.confidence * 100),
+        });
+
+        await sendSms({
+          from: incoming.to,
+          to: incoming.from,
+          body: confirmationMessage,
+        });
+      }
+
+      // Update conversation
+      await db.update(conversations)
+        .set({
+          lastMessageAt: new Date(),
+          messageCount: (conversation.messageCount || 0) + 2,
+        })
+        .where(eq(conversations.id, conversation.id));
+
+      res.status(200).send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+      return;
+    }
+
+    // Handle research status checks
+    if (quickIntent?.primary === INTENTS.CHECK_RESEARCH) {
+      const status = await getLatestResearchStatus(user.id);
+
+      await db.insert(messages).values({
+        conversationId: conversation.id,
+        userId: user.id,
+        role: 'assistant',
+        content: status.statusMessage,
+        fromNumber: incoming.to,
+        toNumber: incoming.from,
+        processedAt: new Date(),
+        detectedIntent: INTENTS.CHECK_RESEARCH,
+        intentConfidence: Math.round(quickIntent.confidence * 100),
+      });
+
+      await sendSms({
+        from: incoming.to,
+        to: incoming.from,
+        body: status.statusMessage,
+      });
+
+      await db.update(conversations)
+        .set({
+          lastMessageAt: new Date(),
+          messageCount: (conversation.messageCount || 0) + 2,
+        })
+        .where(eq(conversations.id, conversation.id));
+
+      res.status(200).send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+      return;
+    }
 
     // Get companion config
     const companion = await db.query.companions.findFirst({

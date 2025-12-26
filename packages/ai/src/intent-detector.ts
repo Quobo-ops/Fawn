@@ -26,6 +26,10 @@ export const INTENTS = {
   RECALL: 'recall',
   SEARCH: 'search',
 
+  // Research
+  DEEP_RESEARCH: 'deep_research',
+  CHECK_RESEARCH: 'check_research',
+
   // People
   ADD_PERSON: 'add_person',
   UPDATE_PERSON: 'update_person',
@@ -61,6 +65,8 @@ Possible intents:
 - remember: User explicitly asks you to remember something
 - recall: User asks about something from their past/memories
 - search: User wants to search through their information
+- deep_research: User wants comprehensive research on a topic (look for phrases like "research", "deep dive", "find out about", "look up", "investigate", "learn about", "what's the latest on")
+- check_research: User is asking about status of ongoing research
 - add_person: User mentions a new person to remember
 - update_person: User shares info about someone they know
 - ask_about_person: User asks about someone in their life
@@ -187,6 +193,41 @@ export function quickIntentMatch(message: string): DetectedIntent | null {
       entities: {},
       requiresAction: true,
       actionType: 'create',
+    };
+  }
+
+  // Deep research requests
+  if (/^(research|deep dive|investigate|look up|find out about|what('s| is) the latest on|can you research)/i.test(lower)) {
+    const topic = message.replace(/^(research|deep dive into?|investigate|look up|find out about|what('s| is) the latest on|can you research)\s*/i, '').trim();
+    return {
+      primary: INTENTS.DEEP_RESEARCH,
+      confidence: 0.9,
+      entities: { topic },
+      requiresAction: true,
+      actionType: 'create',
+    };
+  }
+
+  // Research with "about" pattern
+  if (/research.*(about|on|into)/i.test(lower) || /deep dive.*(about|on|into)/i.test(lower)) {
+    const topicMatch = message.match(/(?:research|deep dive).*?(?:about|on|into)\s+(.+)/i);
+    return {
+      primary: INTENTS.DEEP_RESEARCH,
+      confidence: 0.85,
+      entities: { topic: topicMatch?.[1]?.trim() || message },
+      requiresAction: true,
+      actionType: 'create',
+    };
+  }
+
+  // Check research status
+  if (/^(how('s| is) (the |my )?research|research status|is the research done)/i.test(lower)) {
+    return {
+      primary: INTENTS.CHECK_RESEARCH,
+      confidence: 0.9,
+      entities: {},
+      requiresAction: true,
+      actionType: 'query',
     };
   }
 

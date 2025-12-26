@@ -124,9 +124,9 @@ companionsRouter.patch('/', async (req, res) => {
       .set({
         name: data.name ?? existing.name,
         pronouns: data.pronouns ?? existing.pronouns,
-        personality: updatedPersonality,
+        personality: updatedPersonality as typeof existing.personality,
         rules: data.rules ?? existing.rules,
-        communicationStyle: updatedCommunicationStyle,
+        communicationStyle: updatedCommunicationStyle as typeof existing.communicationStyle,
         customInstructions: data.customInstructions ?? existing.customInstructions,
         updatedAt: new Date(),
       })
