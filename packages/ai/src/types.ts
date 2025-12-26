@@ -48,6 +48,25 @@ export interface UserContext {
   activeGoals: GoalContext[];
   upcomingEvents: EventContext[];
   recentPeople: PersonContext[];
+  onboarding?: OnboardingContext;
+}
+
+export interface OnboardingContext {
+  phase: 'new' | 'getting_acquainted' | 'familiar' | 'established';
+  messageCount: number;
+  overallKnowledgeLevel: number; // 0-100
+  topGaps: KnowledgeGapInfo[];
+  suggestedQuestion?: {
+    question: string;
+    area: string;
+  };
+}
+
+export interface KnowledgeGapInfo {
+  area: string;
+  areaLabel: string;
+  currentScore: number;
+  priority: number;
 }
 
 export interface MessageContext {
