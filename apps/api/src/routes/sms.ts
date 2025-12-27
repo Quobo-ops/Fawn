@@ -1,9 +1,13 @@
 import { Router } from 'express';
-import { db, users, assignedPhoneNumbers, conversations, messages, companions, memories, searchMemoriesByEmbedding } from '@fawn/database';
+import { db, users, assignedPhoneNumbers, conversations, messages, companions, memories, searchMemoriesByEmbedding, getConversationContext } from '@fawn/database';
 import { parseIncomingSms, sendSms } from '@fawn/sms';
 import { CompanionEngine, generateEmbedding, serializeEmbedding } from '@fawn/ai';
 import type { CompanionConfig, UserContext, MemoryContext, GoalContext, MessageContext } from '@fawn/ai';
+import { IndexManager } from '@fawn/indexing';
 import { eq, and, desc } from 'drizzle-orm';
+
+// Initialize index manager for automatic memory indexing
+const indexManager = new IndexManager(db);
 
 export const smsRouter = Router();
 
@@ -105,11 +109,11 @@ smsRouter.post('/webhook', async (req, res) => {
       intentConfidence: Math.round(response.intent.confidence * 100),
     });
 
-    // Store extracted memories
+    // Store extracted memories and index them
     if (response.extractedMemories.length > 0) {
       for (const memory of response.extractedMemories) {
         const embedding = await generateEmbedding(memory.content);
-        await db.insert(memories).values({
+        const [insertedMemory] = await db.insert(memories).values({
           userId: user.id,
           content: memory.content,
           embedding: serializeEmbedding(embedding),
@@ -121,6 +125,18 @@ smsRouter.post('/webhook', async (req, res) => {
             people: memory.people,
             emotion: memory.emotion,
           },
+        }).returning();
+
+        // Index the memory for document synthesis (async, non-blocking)
+        indexManager.indexMemory(
+          insertedMemory.id,
+          user.id,
+          memory.content,
+          memory.category,
+          memory.importance,
+          { people: memory.people, emotion: memory.emotion }
+        ).catch((err) => {
+          console.error('Memory indexing failed:', err);
         });
       }
     }
@@ -162,7 +178,7 @@ async function buildUserContext(
   userId: string,
   user: { name: string | null; timezone: string | null },
   currentMessage: string
-): Promise<UserContext> {
+): Promise<UserContext & { indexContext?: string }> {
   // Get recent messages
   const recentDbMessages = await db.query.messages.findMany({
     where: eq(messages.userId, userId),
@@ -176,23 +192,56 @@ async function buildUserContext(
     timestamp: m.createdAt,
   }));
 
-  // Search for relevant memories
+  // Search for relevant memories and index documents
   let relevantMemories: MemoryContext[] = [];
+  let indexContext: string | undefined;
+
   try {
     const queryEmbedding = await generateEmbedding(currentMessage);
-    const similarMemories = await searchMemoriesByEmbedding(userId, queryEmbedding, 5, 0.6);
-    relevantMemories = similarMemories.map((m) => ({
+
+    // Get comprehensive context including index documents
+    const context = await getConversationContext(userId, queryEmbedding, {
+      maxDocuments: 3,
+      maxMemories: 5,
+      priorityDomains: ['I', 'F', 'J'], // Communication, Emotional, Challenges
+    });
+
+    // Map memories with their index directives
+    relevantMemories = context.memories.map((m: any) => ({
       id: m.id,
       content: m.content,
       category: m.category,
       importance: m.importance,
       relevanceScore: m.similarity,
+      indexCode: m.primary_index_code, // Include index directive
     }));
-  } catch (error) {
-    console.error('Memory search failed:', error);
-  }
 
-  // TODO: Load active goals, upcoming events
+    // Build index context summary for prompt enrichment
+    if (context.indexDocuments.length > 0) {
+      const indexSections = context.indexDocuments.map((doc: any) => {
+        const insights = doc.key_insights?.slice(0, 2).join('; ') || '';
+        const recommendations = doc.recommendations?.slice(0, 2).join('; ') || '';
+        return `[${doc.index_code}] ${doc.title}:\n${doc.summary}\n${insights ? `Key: ${insights}` : ''}\n${recommendations ? `Approach: ${recommendations}` : ''}`;
+      });
+      indexContext = `USER PROFILE CONTEXT:\n${indexSections.join('\n\n')}`;
+    }
+  } catch (error) {
+    console.error('Context retrieval failed:', error);
+    // Fallback to basic memory search
+    try {
+      const queryEmbedding = await generateEmbedding(currentMessage);
+      const similarMemories = await searchMemoriesByEmbedding(userId, queryEmbedding, 5, 0.6);
+      relevantMemories = similarMemories.map((m) => ({
+        id: m.id,
+        content: m.content,
+        category: m.category,
+        importance: m.importance,
+        relevanceScore: m.similarity,
+      }));
+    } catch (fallbackError) {
+      console.error('Fallback memory search also failed:', fallbackError);
+    }
+  }
 
   return {
     userId,
@@ -204,6 +253,7 @@ async function buildUserContext(
     activeGoals: [],
     upcomingEvents: [],
     recentPeople: [],
+    indexContext, // Additional synthesized context from index documents
   };
 }
 

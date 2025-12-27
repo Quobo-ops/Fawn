@@ -10,6 +10,7 @@
   "dependencies": {
     "@fawn/ai": "*",
     "@fawn/database": "*",
+    "@fawn/indexing": "*",
     "@fawn/sms": "*",
     "express": "^4.21.2",
     "cors": "^2.8.5",

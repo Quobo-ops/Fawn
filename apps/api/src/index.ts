@@ -7,6 +7,7 @@ import { companionsRouter } from './routes/companions';
 import { memoriesRouter } from './routes/memories';
 import { goalsRouter } from './routes/goals';
 import { eventsRouter } from './routes/events';
+import { indexingRouter } from './routes/indexing';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -29,6 +30,7 @@ app.use('/api/companions', companionsRouter);
 app.use('/api/memories', memoriesRouter);
 app.use('/api/goals', goalsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/indexing', indexingRouter);
 
 // Error handler
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

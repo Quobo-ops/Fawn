@@ -6,3 +6,4 @@ export * from './conversations';
 export * from './goals';
 export * from './events';
 export * from './relationships';
+export * from './indexing';
