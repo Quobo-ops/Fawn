@@ -14,7 +14,16 @@ function getUserIdFromAuth(authHeader: string | undefined): string | null {
     const token = authHeader.slice(7);
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
     return decoded.userId;
-  } catch {
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      console.warn('[WARN] Invalid JWT token:', error.message);
+    } else if (error instanceof jwt.TokenExpiredError) {
+      console.warn('[WARN] Expired JWT token');
+    } else if (error instanceof jwt.NotBeforeError) {
+      console.warn('[WARN] JWT token not active yet');
+    } else {
+      console.error('[ERROR] JWT verification error:', error);
+    }
     return null;
   }
 }
@@ -29,37 +38,42 @@ eventsRouter.get('/', async (req, res) => {
     return;
   }
 
-  const startDate = req.query.start
-    ? new Date(req.query.start as string)
-    : new Date();
-  const endDate = req.query.end
-    ? new Date(req.query.end as string)
-    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+  try {
+    const startDate = req.query.start
+      ? new Date(req.query.start as string)
+      : new Date();
+    const endDate = req.query.end
+      ? new Date(req.query.end as string)
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
-  const result = await db.query.events.findMany({
-    where: and(
-      eq(events.userId, userId),
-      gte(events.startTime, startDate),
-      lte(events.startTime, endDate),
-      or(eq(events.status, 'scheduled'), eq(events.status, 'completed'))
-    ),
-    orderBy: events.startTime,
-  });
+    const result = await db.query.events.findMany({
+      where: and(
+        eq(events.userId, userId),
+        gte(events.startTime, startDate),
+        lte(events.startTime, endDate),
+        or(eq(events.status, 'scheduled'), eq(events.status, 'completed'))
+      ),
+      orderBy: events.startTime,
+    });
 
-  res.json({
-    events: result.map((e) => ({
-      id: e.id,
-      title: e.title,
-      description: e.description,
-      location: e.location,
-      startTime: e.startTime,
-      endTime: e.endTime,
-      allDay: e.allDay,
-      eventType: e.eventType,
-      status: e.status,
-      recurring: e.recurring,
-    })),
-  });
+    res.json({
+      events: result.map((e) => ({
+        id: e.id,
+        title: e.title,
+        description: e.description,
+        location: e.location,
+        startTime: e.startTime,
+        endTime: e.endTime,
+        allDay: e.allDay,
+        eventType: e.eventType,
+        status: e.status,
+        recurring: e.recurring,
+      })),
+    });
+  } catch (error) {
+    console.error(`[ERROR] List events error for user ${userId}:`, error);
+    res.status(500).json({ error: 'Failed to retrieve events' });
+  }
 });
 
 /**
@@ -105,19 +119,24 @@ eventsRouter.post('/', async (req, res) => {
     // Create reminder entries if specified
     if (data.reminders) {
       for (const reminder of data.reminders) {
-        const triggerAt = new Date(
-          new Date(data.startTime).getTime() - reminder.minutesBefore * 60 * 1000
-        );
+        try {
+          const triggerAt = new Date(
+            new Date(data.startTime).getTime() - reminder.minutesBefore * 60 * 1000
+          );
 
-        await db.insert(reminders).values({
-          userId,
-          content: `Reminder: ${data.title}`,
-          context: data.description,
-          triggerAt,
-          reminderType: 'event',
-          relatedEntityType: 'event',
-          relatedEntityId: event.id,
-        });
+          await db.insert(reminders).values({
+            userId,
+            content: `Reminder: ${data.title}`,
+            context: data.description,
+            triggerAt,
+            reminderType: 'event',
+            relatedEntityType: 'event',
+            relatedEntityId: event.id,
+          });
+        } catch (reminderError) {
+          console.error(`[ERROR] Failed to create reminder for event ${event.id}:`, reminderError);
+          // Continue - event is still created
+        }
       }
     }
 
@@ -132,6 +151,7 @@ eventsRouter.post('/', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Create event error for user ${userId}:`, error);
     res.status(500).json({ error: 'Failed to create event' });
   }
 });
@@ -185,6 +205,7 @@ eventsRouter.patch('/:id', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Update event error for user ${userId}:`, error);
     res.status(500).json({ error: 'Update failed' });
   }
 });
@@ -199,18 +220,23 @@ eventsRouter.delete('/:id', async (req, res) => {
     return;
   }
 
-  const existing = await db.query.events.findFirst({
-    where: and(eq(events.id, req.params.id), eq(events.userId, userId)),
-  });
+  try {
+    const existing = await db.query.events.findFirst({
+      where: and(eq(events.id, req.params.id), eq(events.userId, userId)),
+    });
 
-  if (!existing) {
-    res.status(404).json({ error: 'Event not found' });
-    return;
+    if (!existing) {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
+    await db.delete(events).where(eq(events.id, req.params.id));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`[ERROR] Delete event error for user ${userId}:`, error);
+    res.status(500).json({ error: 'Delete failed' });
   }
-
-  await db.delete(events).where(eq(events.id, req.params.id));
-
-  res.json({ success: true });
 });
 
 // ============ TASKS ============
@@ -225,30 +251,35 @@ eventsRouter.get('/tasks', async (req, res) => {
     return;
   }
 
-  const status = req.query.status as string | undefined;
+  try {
+    const status = req.query.status as string | undefined;
 
-  const conditions = [eq(tasks.userId, userId)];
-  if (status) {
-    conditions.push(eq(tasks.status, status));
+    const conditions = [eq(tasks.userId, userId)];
+    if (status) {
+      conditions.push(eq(tasks.status, status));
+    }
+
+    const result = await db.query.tasks.findMany({
+      where: and(...conditions),
+      orderBy: [desc(tasks.priority), tasks.dueDate],
+    });
+
+    res.json({
+      tasks: result.map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        priority: t.priority,
+        status: t.status,
+        dueDate: t.dueDate,
+        context: t.context,
+        tags: t.tags,
+      })),
+    });
+  } catch (error) {
+    console.error(`[ERROR] List tasks error for user ${userId}:`, error);
+    res.status(500).json({ error: 'Failed to retrieve tasks' });
   }
-
-  const result = await db.query.tasks.findMany({
-    where: and(...conditions),
-    orderBy: [desc(tasks.priority), tasks.dueDate],
-  });
-
-  res.json({
-    tasks: result.map((t) => ({
-      id: t.id,
-      title: t.title,
-      description: t.description,
-      priority: t.priority,
-      status: t.status,
-      dueDate: t.dueDate,
-      context: t.context,
-      tags: t.tags,
-    })),
-  });
 });
 
 /**
@@ -293,6 +324,7 @@ eventsRouter.post('/tasks', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Create task error for user ${userId}:`, error);
     res.status(500).json({ error: 'Failed to create task' });
   }
 });
@@ -307,24 +339,29 @@ eventsRouter.post('/tasks/:id/complete', async (req, res) => {
     return;
   }
 
-  const existing = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, req.params.id), eq(tasks.userId, userId)),
-  });
+  try {
+    const existing = await db.query.tasks.findFirst({
+      where: and(eq(tasks.id, req.params.id), eq(tasks.userId, userId)),
+    });
 
-  if (!existing) {
-    res.status(404).json({ error: 'Task not found' });
-    return;
+    if (!existing) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+
+    await db.update(tasks)
+      .set({
+        status: 'completed',
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(tasks.id, req.params.id));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`[ERROR] Complete task error for user ${userId}:`, error);
+    res.status(500).json({ error: 'Failed to complete task' });
   }
-
-  await db.update(tasks)
-    .set({
-      status: 'completed',
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(tasks.id, req.params.id));
-
-  res.json({ success: true });
 });
 
 // ============ REMINDERS ============
@@ -369,6 +406,7 @@ eventsRouter.post('/reminders', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Create reminder error for user ${userId}:`, error);
     res.status(500).json({ error: 'Failed to create reminder' });
   }
 });

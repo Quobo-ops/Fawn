@@ -14,7 +14,16 @@ function getUserIdFromAuth(authHeader: string | undefined): string | null {
     const token = authHeader.slice(7);
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
     return decoded.userId;
-  } catch {
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      console.warn('[WARN] Invalid JWT token:', error.message);
+    } else if (error instanceof jwt.TokenExpiredError) {
+      console.warn('[WARN] Expired JWT token');
+    } else if (error instanceof jwt.NotBeforeError) {
+      console.warn('[WARN] JWT token not active yet');
+    } else {
+      console.error('[ERROR] JWT verification error:', error);
+    }
     return null;
   }
 }
@@ -29,33 +38,38 @@ goalsRouter.get('/', async (req, res) => {
     return;
   }
 
-  const status = req.query.status as string | undefined;
+  try {
+    const status = req.query.status as string | undefined;
 
-  const conditions = [eq(goals.userId, userId)];
-  if (status) {
-    conditions.push(eq(goals.status, status));
+    const conditions = [eq(goals.userId, userId)];
+    if (status) {
+      conditions.push(eq(goals.status, status));
+    }
+
+    const result = await db.query.goals.findMany({
+      where: and(...conditions),
+      orderBy: [desc(goals.priority), desc(goals.createdAt)],
+    });
+
+    res.json({
+      goals: result.map((g) => ({
+        id: g.id,
+        title: g.title,
+        description: g.description,
+        type: g.type,
+        status: g.status,
+        priority: g.priority,
+        targetDate: g.targetDate,
+        progressPercentage: g.progressPercentage,
+        currentValue: g.currentValue,
+        targetValue: g.targetValue,
+        targetUnit: g.targetUnit,
+      })),
+    });
+  } catch (error) {
+    console.error(`[ERROR] Failed to list goals for user ${userId}:`, error);
+    res.status(500).json({ error: 'Failed to retrieve goals' });
   }
-
-  const result = await db.query.goals.findMany({
-    where: and(...conditions),
-    orderBy: [desc(goals.priority), desc(goals.createdAt)],
-  });
-
-  res.json({
-    goals: result.map((g) => ({
-      id: g.id,
-      title: g.title,
-      description: g.description,
-      type: g.type,
-      status: g.status,
-      priority: g.priority,
-      targetDate: g.targetDate,
-      progressPercentage: g.progressPercentage,
-      currentValue: g.currentValue,
-      targetValue: g.targetValue,
-      targetUnit: g.targetUnit,
-    })),
-  });
 });
 
 /**
@@ -100,6 +114,7 @@ goalsRouter.post('/', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Create goal error for user ${userId}:`, error);
     res.status(500).json({ error: 'Failed to create goal' });
   }
 });
@@ -114,31 +129,36 @@ goalsRouter.get('/:id', async (req, res) => {
     return;
   }
 
-  const goal = await db.query.goals.findFirst({
-    where: and(eq(goals.id, req.params.id), eq(goals.userId, userId)),
-  });
+  try {
+    const goal = await db.query.goals.findFirst({
+      where: and(eq(goals.id, req.params.id), eq(goals.userId, userId)),
+    });
 
-  if (!goal) {
-    res.status(404).json({ error: 'Goal not found' });
-    return;
+    if (!goal) {
+      res.status(404).json({ error: 'Goal not found' });
+      return;
+    }
+
+    const progress = await db.query.goalProgress.findMany({
+      where: eq(goalProgress.goalId, goal.id),
+      orderBy: desc(goalProgress.recordedAt),
+      limit: 50,
+    });
+
+    res.json({
+      ...goal,
+      progress: progress.map((p) => ({
+        id: p.id,
+        value: p.value,
+        note: p.note,
+        mood: p.mood,
+        recordedAt: p.recordedAt,
+      })),
+    });
+  } catch (error) {
+    console.error(`[ERROR] Get goal error for user ${userId}:`, error);
+    res.status(500).json({ error: 'Failed to retrieve goal' });
   }
-
-  const progress = await db.query.goalProgress.findMany({
-    where: eq(goalProgress.goalId, goal.id),
-    orderBy: desc(goalProgress.recordedAt),
-    limit: 50,
-  });
-
-  res.json({
-    ...goal,
-    progress: progress.map((p) => ({
-      id: p.id,
-      value: p.value,
-      note: p.note,
-      mood: p.mood,
-      recordedAt: p.recordedAt,
-    })),
-  });
 });
 
 /**
@@ -187,6 +207,7 @@ goalsRouter.patch('/:id', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Update goal error for user ${userId}:`, error);
     res.status(500).json({ error: 'Update failed' });
   }
 });
@@ -252,6 +273,7 @@ goalsRouter.post('/:id/progress', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Log progress error for user ${userId}:`, error);
     res.status(500).json({ error: 'Failed to log progress' });
   }
 });
@@ -266,23 +288,28 @@ goalsRouter.get('/habits/list', async (req, res) => {
     return;
   }
 
-  const result = await db.query.habits.findMany({
-    where: eq(habits.userId, userId),
-    orderBy: desc(habits.currentStreak),
-  });
+  try {
+    const result = await db.query.habits.findMany({
+      where: eq(habits.userId, userId),
+      orderBy: desc(habits.currentStreak),
+    });
 
-  res.json({
-    habits: result.map((h) => ({
-      id: h.id,
-      name: h.name,
-      description: h.description,
-      frequency: h.frequency,
-      currentStreak: h.currentStreak,
-      longestStreak: h.longestStreak,
-      lastCompletedAt: h.lastCompletedAt,
-      active: h.active,
-    })),
-  });
+    res.json({
+      habits: result.map((h) => ({
+        id: h.id,
+        name: h.name,
+        description: h.description,
+        frequency: h.frequency,
+        currentStreak: h.currentStreak,
+        longestStreak: h.longestStreak,
+        lastCompletedAt: h.lastCompletedAt,
+        active: h.active,
+      })),
+    });
+  } catch (error) {
+    console.error(`[ERROR] List habits error for user ${userId}:`, error);
+    res.status(500).json({ error: 'Failed to retrieve habits' });
+  }
 });
 
 /**
@@ -295,21 +322,21 @@ goalsRouter.post('/habits/:id/complete', async (req, res) => {
     return;
   }
 
-  const habit = await db.query.habits.findFirst({
-    where: and(eq(habits.id, req.params.id), eq(habits.userId, userId)),
-  });
-
-  if (!habit) {
-    res.status(404).json({ error: 'Habit not found' });
-    return;
-  }
-
-  const logSchema = z.object({
-    note: z.string().max(500).optional(),
-    quality: z.number().min(1).max(5).optional(),
-  });
-
   try {
+    const habit = await db.query.habits.findFirst({
+      where: and(eq(habits.id, req.params.id), eq(habits.userId, userId)),
+    });
+
+    if (!habit) {
+      res.status(404).json({ error: 'Habit not found' });
+      return;
+    }
+
+    const logSchema = z.object({
+      note: z.string().max(500).optional(),
+      quality: z.number().min(1).max(5).optional(),
+    });
+
     const data = logSchema.parse(req.body);
 
     await db.insert(habitCompletions).values({
@@ -357,6 +384,7 @@ goalsRouter.post('/habits/:id/complete', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Log habit completion error for user ${userId}:`, error);
     res.status(500).json({ error: 'Failed to log completion' });
   }
 });

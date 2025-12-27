@@ -15,7 +15,16 @@ function getUserIdFromAuth(authHeader: string | undefined): string | null {
     const token = authHeader.slice(7);
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
     return decoded.userId;
-  } catch {
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      console.warn('[WARN] Invalid JWT token:', error.message);
+    } else if (error instanceof jwt.TokenExpiredError) {
+      console.warn('[WARN] Expired JWT token');
+    } else if (error instanceof jwt.NotBeforeError) {
+      console.warn('[WARN] JWT token not active yet');
+    } else {
+      console.error('[ERROR] JWT verification error:', error);
+    }
     return null;
   }
 }
@@ -39,6 +48,24 @@ memoriesRouter.get('/search', async (req, res) => {
   try {
     // Generate embedding for query and search
     const queryEmbedding = await generateEmbedding(query);
+    
+    if (!queryEmbedding || queryEmbedding.length === 0) {
+      console.warn(`[WARN] Empty embedding for query, falling back to text search`);
+      // Fall back to text search
+      try {
+        const textResults = await searchMemoriesByText(userId, query, 20);
+        res.json({
+          query,
+          results: textResults,
+          fallback: true,
+        });
+      } catch (textSearchError) {
+        console.error(`[ERROR] Text search fallback also failed for user ${userId}:`, textSearchError);
+        res.status(500).json({ error: 'Memory search failed' });
+      }
+      return;
+    }
+    
     const results = await searchMemoriesByEmbedding(userId, queryEmbedding, 20, 0.5);
 
     res.json({
@@ -54,14 +81,25 @@ memoriesRouter.get('/search', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Memory search error:', error);
-    // Fall back to text search
-    const textResults = await searchMemoriesByText(userId, query, 20);
-    res.json({
-      query,
-      results: textResults,
-      fallback: true,
+    console.error(`[ERROR] Memory search error for user ${userId}:`, error, {
+      query: query.substring(0, 50),
     });
+    
+    // Fall back to text search
+    try {
+      const textResults = await searchMemoriesByText(userId, query, 20);
+      res.json({
+        query,
+        results: textResults,
+        fallback: true,
+      });
+    } catch (fallbackError) {
+      console.error(`[ERROR] Text search fallback also failed for user ${userId}:`, fallbackError);
+      res.status(500).json({ 
+        error: 'Memory search failed',
+        details: process.env.NODE_ENV === 'development' ? String(fallbackError) : undefined,
+      });
+    }
   }
 });
 
@@ -75,35 +113,40 @@ memoriesRouter.get('/', async (req, res) => {
     return;
   }
 
-  const category = req.query.category as string | undefined;
-  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-  const offset = parseInt(req.query.offset as string) || 0;
+  try {
+    const category = req.query.category as string | undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
 
-  const conditions = [eq(memories.userId, userId)];
-  if (category) {
-    conditions.push(eq(memories.category, category));
+    const conditions = [eq(memories.userId, userId)];
+    if (category) {
+      conditions.push(eq(memories.category, category));
+    }
+
+    const result = await db.query.memories.findMany({
+      where: and(...conditions),
+      orderBy: [desc(memories.importance), desc(memories.createdAt)],
+      limit,
+      offset,
+    });
+
+    res.json({
+      memories: result.map((m) => ({
+        id: m.id,
+        content: m.content,
+        category: m.category,
+        subcategory: m.subcategory,
+        importance: m.importance,
+        tags: m.tags,
+        occurredAt: m.occurredAt,
+        createdAt: m.createdAt,
+      })),
+      pagination: { limit, offset },
+    });
+  } catch (error) {
+    console.error(`[ERROR] Failed to list memories for user ${userId}:`, error);
+    res.status(500).json({ error: 'Failed to retrieve memories' });
   }
-
-  const result = await db.query.memories.findMany({
-    where: and(...conditions),
-    orderBy: [desc(memories.importance), desc(memories.createdAt)],
-    limit,
-    offset,
-  });
-
-  res.json({
-    memories: result.map((m) => ({
-      id: m.id,
-      content: m.content,
-      category: m.category,
-      subcategory: m.subcategory,
-      importance: m.importance,
-      tags: m.tags,
-      occurredAt: m.occurredAt,
-      createdAt: m.createdAt,
-    })),
-    pagination: { limit, offset },
-  });
 });
 
 /**
@@ -130,11 +173,15 @@ memoriesRouter.post('/', async (req, res) => {
 
     // Generate embedding
     const embedding = await generateEmbedding(data.content);
+    
+    if (!embedding || embedding.length === 0) {
+      console.warn(`[WARN] Could not generate embedding for new memory`);
+    }
 
     const [memory] = await db.insert(memories).values({
       userId,
       content: data.content,
-      embedding: serializeEmbedding(embedding),
+      embedding: embedding.length > 0 ? serializeEmbedding(embedding) : null,
       category: data.category,
       subcategory: data.subcategory,
       importance: data.importance || 5,
@@ -154,7 +201,7 @@ memoriesRouter.post('/', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
-    console.error('Create memory error:', error);
+    console.error(`[ERROR] Create memory error for user ${userId}:`, error);
     res.status(500).json({ error: 'Failed to create memory' });
   }
 });
@@ -195,7 +242,9 @@ memoriesRouter.patch('/:id', async (req, res) => {
     let embedding = existing.embedding;
     if (data.content && data.content !== existing.content) {
       const newEmbedding = await generateEmbedding(data.content);
-      embedding = serializeEmbedding(newEmbedding);
+      if (newEmbedding && newEmbedding.length > 0) {
+        embedding = serializeEmbedding(newEmbedding);
+      }
     }
 
     await db.update(memories)
@@ -213,6 +262,7 @@ memoriesRouter.patch('/:id', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Update memory error for user ${userId}:`, error);
     res.status(500).json({ error: 'Update failed' });
   }
 });
@@ -229,19 +279,24 @@ memoriesRouter.delete('/:id', async (req, res) => {
 
   const memoryId = req.params.id;
 
-  // Verify ownership
-  const existing = await db.query.memories.findFirst({
-    where: and(eq(memories.id, memoryId), eq(memories.userId, userId)),
-  });
+  try {
+    // Verify ownership
+    const existing = await db.query.memories.findFirst({
+      where: and(eq(memories.id, memoryId), eq(memories.userId, userId)),
+    });
 
-  if (!existing) {
-    res.status(404).json({ error: 'Memory not found' });
-    return;
+    if (!existing) {
+      res.status(404).json({ error: 'Memory not found' });
+      return;
+    }
+
+    await db.delete(memories).where(eq(memories.id, memoryId));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`[ERROR] Delete memory error for user ${userId}:`, error);
+    res.status(500).json({ error: 'Delete failed' });
   }
-
-  await db.delete(memories).where(eq(memories.id, memoryId));
-
-  res.json({ success: true });
 });
 
 /**
@@ -254,19 +309,24 @@ memoriesRouter.get('/summary', async (req, res) => {
     return;
   }
 
-  const result = await db
-    .select({
-      category: memories.category,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(memories)
-    .where(eq(memories.userId, userId))
-    .groupBy(memories.category);
+  try {
+    const result = await db
+      .select({
+        category: memories.category,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(memories)
+      .where(eq(memories.userId, userId))
+      .groupBy(memories.category);
 
-  const total = result.reduce((sum, r) => sum + r.count, 0);
+    const total = result.reduce((sum, r) => sum + r.count, 0);
 
-  res.json({
-    total,
-    byCategory: Object.fromEntries(result.map((r) => [r.category, r.count])),
-  });
+    res.json({
+      total,
+      byCategory: Object.fromEntries(result.map((r) => [r.category, r.count])),
+    });
+  } catch (error) {
+    console.error(`[ERROR] Memory summary error for user ${userId}:`, error);
+    res.status(500).json({ error: 'Failed to get memory summary' });
+  }
 });

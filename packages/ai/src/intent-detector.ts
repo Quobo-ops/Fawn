@@ -1,7 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { DetectedIntent } from './types';
 
-const anthropic = new Anthropic();
+// Lazy initialization - only create client when needed and API key is available
+let anthropic: Anthropic | null = null;
+
+function getAnthropicClient(): Anthropic {
+  if (anthropic) return anthropic;
+  
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+  }
+  
+  anthropic = new Anthropic();
+  return anthropic;
+}
 
 export const INTENTS = {
   // Scheduling
@@ -96,7 +108,8 @@ export async function detectIntent(
     : '';
 
   try {
-    const response = await anthropic.messages.create({
+    const client = getAnthropicClient();
+    const response = await client.messages.create({
       model: 'claude-opus-4-20250514',
       max_tokens: 256,
       system: INTENT_DETECTION_PROMPT,
@@ -110,24 +123,36 @@ export async function detectIntent(
 
     const content = response.content[0];
     if (content.type !== 'text') {
+      console.warn('[WARN] Intent detection returned non-text content');
       return defaultIntent();
     }
 
     const jsonMatch = content.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.warn('[WARN] Intent detection response did not contain JSON');
       return defaultIntent();
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    return {
-      primary: parsed.primary || INTENTS.UNKNOWN,
-      confidence: parsed.confidence || 0.5,
-      entities: parsed.entities || {},
-      requiresAction: parsed.requiresAction || false,
-      actionType: parsed.actionType,
-    };
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        primary: parsed.primary || INTENTS.UNKNOWN,
+        confidence: parsed.confidence || 0.5,
+        entities: parsed.entities || {},
+        requiresAction: parsed.requiresAction || false,
+        actionType: parsed.actionType,
+      };
+    } catch (parseError) {
+      console.error('[ERROR] Failed to parse intent detection JSON:', parseError, {
+        responseText: content.text.substring(0, 200),
+      });
+      return defaultIntent();
+    }
   } catch (error) {
-    console.error('Intent detection failed:', error);
+    console.error('[ERROR] Intent detection failed:', error, {
+      messagePreview: message.substring(0, 100),
+      hasContext: !!recentContext,
+    });
     return defaultIntent();
   }
 }

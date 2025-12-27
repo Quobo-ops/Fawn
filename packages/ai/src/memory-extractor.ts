@@ -1,7 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ExtractedMemory } from './types';
 
-const anthropic = new Anthropic();
+// Lazy initialization - only create client when needed and API key is available
+let anthropic: Anthropic | null = null;
+
+function getAnthropicClient(): Anthropic {
+  if (anthropic) return anthropic;
+  
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+  }
+  
+  anthropic = new Anthropic();
+  return anthropic;
+}
 
 const EXTRACTION_PROMPT = `You are a memory extraction system. Analyze the conversation and extract important facts, preferences, events, and information that should be remembered about the user.
 
@@ -39,7 +51,8 @@ export async function extractMemories(
   const messageToAnalyze = `${conversationText}User: ${userMessage}\n\nAssistant: ${assistantResponse}`;
 
   try {
-    const response = await anthropic.messages.create({
+    const client = getAnthropicClient();
+    const response = await client.messages.create({
       model: 'claude-opus-4-20250514',
       max_tokens: 1024,
       system: EXTRACTION_PROMPT,
@@ -53,19 +66,37 @@ export async function extractMemories(
 
     const content = response.content[0];
     if (content.type !== 'text') {
+      console.warn('[WARN] Memory extraction returned non-text content');
       return [];
     }
 
     // Parse JSON response
     const jsonMatch = content.text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
+      console.warn('[WARN] Memory extraction response did not contain JSON array');
       return [];
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as ExtractedMemory[];
-    return parsed.filter(validateMemory);
+    try {
+      const parsed = JSON.parse(jsonMatch[0]) as ExtractedMemory[];
+      const validMemories = parsed.filter(validateMemory);
+      
+      if (validMemories.length < parsed.length) {
+        console.warn(`[WARN] Filtered out ${parsed.length - validMemories.length} invalid memories`);
+      }
+      
+      return validMemories;
+    } catch (parseError) {
+      console.error('[ERROR] Failed to parse memory extraction JSON:', parseError, {
+        responseText: content.text.substring(0, 200),
+      });
+      return [];
+    }
   } catch (error) {
-    console.error('Memory extraction failed:', error);
+    console.error('[ERROR] Memory extraction failed:', error, {
+      userMessagePreview: userMessage.substring(0, 50),
+      hasContext: !!conversationContext,
+    });
     return [];
   }
 }
@@ -113,7 +144,8 @@ ${existingMemories.map((m, i) => `${i + 1}. [${m.id}] ${m.content}`).join('\n')}
 Respond with JSON: { "supersedes": ["id1"], "contradicts": ["id2"], "relatedTo": ["id3"] }`;
 
   try {
-    const response = await anthropic.messages.create({
+    const client = getAnthropicClient();
+    const response = await client.messages.create({
       model: 'claude-opus-4-20250514',
       max_tokens: 256,
       messages: [{ role: 'user', content: prompt }],
@@ -121,16 +153,27 @@ Respond with JSON: { "supersedes": ["id1"], "contradicts": ["id2"], "relatedTo":
 
     const content = response.content[0];
     if (content.type !== 'text') {
+      console.warn('[WARN] Memory conflict check returned non-text content');
       return { supersedes: [], contradicts: [], relatedTo: [] };
     }
 
     const jsonMatch = content.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.warn('[WARN] Memory conflict check response did not contain JSON');
       return { supersedes: [], contradicts: [], relatedTo: [] };
     }
 
-    return JSON.parse(jsonMatch[0]);
-  } catch {
+    try {
+      return JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('[ERROR] Failed to parse memory conflict check JSON:', parseError);
+      return { supersedes: [], contradicts: [], relatedTo: [] };
+    }
+  } catch (error) {
+    console.error('[ERROR] Memory conflict check failed:', error, {
+      memoryContent: newMemory.content.substring(0, 50),
+      existingCount: existingMemories.length,
+    });
     return { supersedes: [], contradicts: [], relatedTo: [] };
   }
 }

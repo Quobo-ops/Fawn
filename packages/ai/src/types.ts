@@ -67,16 +67,18 @@ export interface MemoryContext {
 export interface GoalContext {
   id: string;
   title: string;
-  type: string;
+  type?: string;
+  description?: string;
   status?: string;
   progress: number;
-  targetDate?: string;
+  targetDate?: Date | string;
   lastCheckIn?: Date;
 }
 
 export interface EventContext {
   id: string;
   title: string;
+  description?: string;
   startTime: Date;
   endTime?: Date;
   location?: string;

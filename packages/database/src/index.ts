@@ -1,4 +1,4 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema';
 
@@ -6,7 +6,7 @@ export * from './schema';
 
 // Lazy initialization - pool is created on first use after env vars are loaded
 let pool: Pool | null = null;
-let dbInstance: ReturnType<typeof drizzle> | null = null;
+let dbInstance: NodePgDatabase<typeof schema> | null = null;
 
 function getPool(): Pool {
   if (!pool) {
@@ -20,7 +20,8 @@ function getPool(): Pool {
   return pool;
 }
 
-export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+// Create a typed proxy for lazy initialization
+export const db = new Proxy({} as NodePgDatabase<typeof schema>, {
   get(_, prop) {
     if (!dbInstance) {
       dbInstance = drizzle(getPool(), { schema });

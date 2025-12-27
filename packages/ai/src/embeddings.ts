@@ -17,23 +17,35 @@ const EMBEDDING_MODEL = 'text-embedding-ada-002';
 
 /**
  * Generate embedding for a single text
- * Returns null if OpenAI is not configured
+ * Returns empty array if OpenAI is not configured or fails
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const client = getOpenAIClient();
   if (!client) {
-    // Return empty embedding if OpenAI not configured
-    // This allows the system to work without embeddings
-    console.warn('OpenAI not configured - skipping embedding generation');
+    console.warn('[WARN] OpenAI not configured - skipping embedding generation');
     return [];
   }
   
-  const response = await client.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: text,
-  });
+  try {
+    const response = await client.embeddings.create({
+      model: EMBEDDING_MODEL,
+      input: text,
+    });
 
-  return response.data[0].embedding;
+    if (!response.data || response.data.length === 0) {
+      console.error('[ERROR] OpenAI returned empty embedding data');
+      return [];
+    }
+
+    return response.data[0].embedding;
+  } catch (error) {
+    console.error('[ERROR] Failed to generate embedding:', error, {
+      textLength: text.length,
+      textPreview: text.substring(0, 100),
+    });
+    // Return empty array to allow graceful degradation
+    return [];
+  }
 }
 
 /**
@@ -45,20 +57,33 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
 
   const client = getOpenAIClient();
   if (!client) {
-    console.warn('OpenAI not configured - skipping embedding generation');
+    console.warn('[WARN] OpenAI not configured - skipping embedding generation');
     return texts.map(() => []);
   }
 
-  // OpenAI supports batch embedding
-  const response = await client.embeddings.create({
-    model: EMBEDDING_MODEL,
-    input: texts,
-  });
+  try {
+    // OpenAI supports batch embedding
+    const response = await client.embeddings.create({
+      model: EMBEDDING_MODEL,
+      input: texts,
+    });
 
-  // Sort by index to maintain order
-  return response.data
-    .sort((a, b) => a.index - b.index)
-    .map((item) => item.embedding);
+    if (!response.data || response.data.length === 0) {
+      console.error('[ERROR] OpenAI returned empty embedding data');
+      return texts.map(() => []);
+    }
+
+    // Sort by index to maintain order
+    return response.data
+      .sort((a, b) => a.index - b.index)
+      .map((item) => item.embedding);
+  } catch (error) {
+    console.error('[ERROR] Failed to generate embeddings:', error, {
+      textCount: texts.length,
+    });
+    // Return empty arrays for graceful degradation
+    return texts.map(() => []);
+  }
 }
 
 /**
@@ -67,6 +92,10 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) {
     throw new Error('Embeddings must have the same length');
+  }
+
+  if (a.length === 0) {
+    return 0;
   }
 
   let dotProduct = 0;
@@ -79,7 +108,12 @@ export function cosineSimilarity(a: number[], b: number[]): number {
     normB += b[i] * b[i];
   }
 
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denominator === 0) {
+    return 0;
+  }
+
+  return dotProduct / denominator;
 }
 
 /**
@@ -103,5 +137,10 @@ export function serializeEmbedding(embedding: number[]): string {
  * Deserialize embedding from string
  */
 export function deserializeEmbedding(serialized: string): number[] {
-  return JSON.parse(serialized);
+  try {
+    return JSON.parse(serialized);
+  } catch (error) {
+    console.error('[ERROR] Failed to deserialize embedding:', error);
+    return [];
+  }
 }

@@ -24,6 +24,26 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
+function getUserIdFromAuth(authHeader: string | undefined): string | null {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  try {
+    const token = authHeader.slice(7);
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    return decoded.userId;
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      console.warn('[WARN] Invalid JWT token:', error.message);
+    } else if (error instanceof jwt.TokenExpiredError) {
+      console.warn('[WARN] Expired JWT token');
+    } else if (error instanceof jwt.NotBeforeError) {
+      console.warn('[WARN] JWT token not active yet');
+    } else {
+      console.error('[ERROR] JWT verification error:', error);
+    }
+    return null;
+  }
+}
+
 /**
  * Create a new user account
  */
@@ -53,38 +73,45 @@ usersRouter.post('/register', async (req, res) => {
       timezone: data.timezone || 'UTC',
     }).returning();
 
+    console.log(`[INFO] Created user: ${user.id} (${user.email})`);
+
     // Create default companion
-    await db.insert(companions).values({
-      userId: user.id,
-      name: 'Fawn',
-      pronouns: 'they/them',
-      personality: {
-        warmth: 7,
-        humor: 5,
-        directness: 6,
-        formality: 3,
-        curiosity: 7,
-        encouragement: 7,
-        traits: [],
-      },
-      communicationStyle: {
-        emojiFrequency: 'moderate',
-        brevity: 'short',
-        addressStyle: 'name',
-      },
-      rules: {
-        holdAccountable: true,
-        accountabilityLevel: 'moderate',
-      },
-    });
+    try {
+      await db.insert(companions).values({
+        userId: user.id,
+        name: 'Fawn',
+        pronouns: 'they/them',
+        personality: {
+          warmth: 7,
+          humor: 5,
+          directness: 6,
+          formality: 3,
+          curiosity: 7,
+          encouragement: 7,
+          traits: [],
+        },
+        communicationStyle: {
+          emojiFrequency: 'moderate',
+          brevity: 'short',
+          addressStyle: 'name',
+        },
+        rules: {
+          holdAccountable: true,
+          accountabilityLevel: 'moderate',
+        },
+      });
+    } catch (companionError) {
+      console.error(`[ERROR] Failed to create companion for user ${user.id}:`, companionError);
+      // Continue - user can still use the system
+    }
 
     // Provision a Twilio phone number
+    const webhookUrl = `${process.env.API_BASE_URL}/api/sms/webhook`;
     let companionNumber: string | null = null;
     let provisioningError: string | null = null;
+    let provisionedNumber: { phoneNumber: string; sid: string } | null = null;
 
     try {
-      const webhookUrl = `${process.env.API_BASE_URL}/api/sms/webhook`;
-
       const availableNumbers = await searchAvailableNumbers({
         country: 'US',
         smsCapable: true,
@@ -92,38 +119,51 @@ usersRouter.post('/register', async (req, res) => {
 
       if (availableNumbers.length === 0) {
         provisioningError = 'No phone numbers available';
-        console.error('No phone numbers available for user:', user.id);
+        console.error(`[ERROR] No phone numbers available for user ${user.id}`);
       } else {
-        const provisionedNumber = await provisionPhoneNumber(
-          availableNumbers[0].phoneNumber,
-          webhookUrl,
-          `Fawn - ${user.email}`
-        );
-
-        await db.insert(assignedPhoneNumbers).values({
-          userId: user.id,
-          phoneNumber: provisionedNumber.phoneNumber,
-          twilioSid: provisionedNumber.sid,
-        });
-
-        companionNumber = provisionedNumber.phoneNumber;
-
-        // Send welcome message
         try {
-          await sendSms({
-            from: provisionedNumber.phoneNumber,
-            to: data.phoneNumber,
-            body: `Hey! I'm Fawn, your new AI companion. Save this number - this is where we'll chat. You can tell me about your day, set goals, schedule things, or just talk. I'm here whenever you need me. What's on your mind?`,
+          provisionedNumber = await provisionPhoneNumber(
+            availableNumbers[0].phoneNumber,
+            webhookUrl,
+            `Fawn - ${user.email}`
+          );
+
+          await db.insert(assignedPhoneNumbers).values({
+            userId: user.id,
+            phoneNumber: provisionedNumber.phoneNumber,
+            twilioSid: provisionedNumber.sid,
           });
-        } catch (smsError) {
-          console.error('Failed to send welcome SMS:', smsError);
-          // Don't fail registration if welcome SMS fails
+
+          companionNumber = provisionedNumber.phoneNumber;
+          console.log(`[INFO] Provisioned phone number ${provisionedNumber.phoneNumber} for user ${user.id}`);
+        } catch (provisionError) {
+          provisioningError = 'Phone provisioning failed';
+          console.error(`[ERROR] Failed to provision phone number for user ${user.id}:`, provisionError);
+          // Continue without phone number - user can still use web interface
         }
       }
-    } catch (error) {
-      provisioningError = 'Phone provisioning failed';
-      console.error('Phone number provisioning failed:', error);
-      // Continue without a number - user can retry later
+    } catch (numberSearchError) {
+      provisioningError = 'Phone number search failed';
+      console.error(`[ERROR] Failed to search for available numbers for user ${user.id}:`, numberSearchError);
+      // Continue without phone number
+    }
+
+    // Send welcome message (only if we have a number)
+    if (provisionedNumber) {
+      try {
+        await sendSms({
+          from: provisionedNumber.phoneNumber,
+          to: data.phoneNumber,
+          body: `Hey! I'm Fawn, your new AI companion. Save this number - this is where we'll chat. You can tell me about your day, set goals, schedule things, or just talk. I'm here whenever you need me. What's on your mind?`,
+        });
+        console.log(`[INFO] Sent welcome SMS to ${data.phoneNumber}`);
+      } catch (smsError) {
+        console.error(`[ERROR] Failed to send welcome SMS to ${data.phoneNumber}:`, smsError, {
+          userId: user.id,
+          fromNumber: provisionedNumber.phoneNumber,
+        });
+        // Non-critical - user account is still created
+      }
     }
 
     // Generate JWT
@@ -142,6 +182,7 @@ usersRouter.post('/register', async (req, res) => {
       },
       token,
       provisioningError,
+      phoneNumberAssigned: !!provisionedNumber,
     });
 
   } catch (error) {
@@ -149,7 +190,9 @@ usersRouter.post('/register', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
-    console.error('Registration error:', error);
+    console.error('[ERROR] Registration error:', error, {
+      email: req.body?.email,
+    });
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -183,6 +226,8 @@ usersRouter.post('/login', async (req, res) => {
       { expiresIn: '30d' }
     );
 
+    console.log(`[INFO] User logged in: ${user.id}`);
+
     res.json({
       user: {
         id: user.id,
@@ -197,6 +242,7 @@ usersRouter.post('/login', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error('[ERROR] Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -205,18 +251,15 @@ usersRouter.post('/login', async (req, res) => {
  * Get current user profile
  */
 usersRouter.get('/me', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  const userId = getUserIdFromAuth(req.headers.authorization);
+  if (!userId) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
   try {
-    const token = authHeader.slice(7);
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-
     const user = await db.query.users.findFirst({
-      where: eq(users.id, decoded.userId),
+      where: eq(users.id, userId),
     });
 
     if (!user) {
@@ -238,9 +281,9 @@ usersRouter.get('/me', async (req, res) => {
       onboardingComplete: user.onboardingComplete,
       createdAt: user.createdAt,
     });
-
-  } catch {
-    res.status(401).json({ error: 'Invalid token' });
+  } catch (error) {
+    console.error(`[ERROR] Failed to get user profile for ${userId}:`, error);
+    res.status(500).json({ error: 'Failed to retrieve user profile' });
   }
 });
 
@@ -248,16 +291,13 @@ usersRouter.get('/me', async (req, res) => {
  * Update user profile
  */
 usersRouter.patch('/me', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  const userId = getUserIdFromAuth(req.headers.authorization);
+  if (!userId) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 
   try {
-    const token = authHeader.slice(7);
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-
     const updateSchema = z.object({
       name: z.string().optional(),
       timezone: z.string().optional(),
@@ -272,7 +312,7 @@ usersRouter.patch('/me', async (req, res) => {
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(users.id, decoded.userId));
+      .where(eq(users.id, userId));
 
     res.json({ success: true });
 
@@ -281,6 +321,7 @@ usersRouter.patch('/me', async (req, res) => {
       res.status(400).json({ error: 'Validation failed', details: error.errors });
       return;
     }
+    console.error(`[ERROR] Failed to update user profile for ${userId}:`, error);
     res.status(500).json({ error: 'Update failed' });
   }
 });

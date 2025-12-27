@@ -11,7 +11,19 @@ import type {
   ExtractedMemory,
 } from './types';
 
-const anthropic = new Anthropic();
+// Lazy initialization - only create client when needed and API key is available
+let anthropic: Anthropic | null = null;
+
+function getAnthropicClient(): Anthropic {
+  if (anthropic) return anthropic;
+  
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+  }
+  
+  anthropic = new Anthropic();
+  return anthropic;
+}
 
 export interface CompanionResponse {
   content: string;
@@ -53,41 +65,75 @@ export class CompanionEngine {
     context: UserContext
   ): Promise<CompanionResponse> {
     // Detect intent (try quick match first)
-    let intent = quickIntentMatch(userMessage);
-    if (!intent || intent.confidence < 0.8) {
-      const recentContext = context.recentMessages
-        .slice(-3)
-        .map((m) => `${m.role}: ${m.content}`)
-        .join('\n');
-      intent = await detectIntent(userMessage, recentContext);
+    let intent: DetectedIntent;
+    try {
+      const quickMatch = quickIntentMatch(userMessage);
+      if (quickMatch && quickMatch.confidence >= 0.8) {
+        intent = quickMatch;
+      } else {
+        const recentContext = context.recentMessages
+          .slice(-3)
+          .map((m) => `${m.role}: ${m.content}`)
+          .join('\n');
+        intent = await detectIntent(userMessage, recentContext);
+      }
+    } catch (error) {
+      console.error('[ERROR] Intent detection failed:', error);
+      intent = {
+        primary: 'unknown',
+        confidence: 0,
+        entities: {},
+        requiresAction: false,
+      };
     }
 
     // Build system prompt with context
-    const systemPrompt = buildSystemPrompt(this.config, context);
+    let systemPrompt: string;
+    try {
+      systemPrompt = buildSystemPrompt(this.config, context);
+    } catch (error) {
+      console.error('[ERROR] Failed to build system prompt:', error);
+      throw new Error('Failed to build system prompt');
+    }
 
     // Build message history
     const messages = this.buildMessageHistory(context.recentMessages, userMessage);
 
     // Generate response
-    const response = await anthropic.messages.create({
-      model: this.options.model,
-      max_tokens: this.options.maxTokens,
-      temperature: this.options.temperature,
-      system: systemPrompt,
-      messages,
-    });
+    let response;
+    try {
+      const client = getAnthropicClient();
+      response = await client.messages.create({
+        model: this.options.model,
+        max_tokens: this.options.maxTokens,
+        temperature: this.options.temperature,
+        system: systemPrompt,
+        messages,
+      });
+    } catch (error) {
+      console.error('[ERROR] Anthropic API call failed:', error, {
+        model: this.options.model,
+        messageLength: userMessage.length,
+      });
+      throw error;
+    }
 
     const content = response.content[0];
     if (content.type !== 'text') {
+      console.error('[ERROR] Unexpected response type from Anthropic:', content.type);
       throw new Error('Unexpected response type');
     }
 
     const responseText = content.text;
 
-    // Extract memories in background (don't await in critical path for SMS latency)
-    const memoriesPromise = extractMemories(userMessage, responseText);
-
-    const extractedMemories = await memoriesPromise;
+    // Extract memories (handle errors gracefully)
+    let extractedMemories: ExtractedMemory[] = [];
+    try {
+      extractedMemories = await extractMemories(userMessage, responseText);
+    } catch (error) {
+      console.error('[ERROR] Memory extraction failed:', error);
+      // Continue without extracted memories
+    }
 
     return {
       content: responseText,
@@ -106,7 +152,13 @@ export class CompanionEngine {
     type: 'check_in' | 'reminder' | 'goal_nudge' | 'event_reminder',
     additionalContext?: string
   ): Promise<string> {
-    const systemPrompt = buildSystemPrompt(this.config, context);
+    let systemPrompt: string;
+    try {
+      systemPrompt = buildSystemPrompt(this.config, context);
+    } catch (error) {
+      console.error('[ERROR] Failed to build system prompt:', error);
+      throw new Error('Failed to build system prompt');
+    }
 
     const proactivePrompts = {
       check_in: `Generate a friendly check-in message. Be natural and conversational. Don't be formulaic.`,
@@ -115,25 +167,33 @@ export class CompanionEngine {
       event_reminder: `Generate an event reminder. ${additionalContext || ''}`,
     };
 
-    const response = await anthropic.messages.create({
-      model: this.options.model,
-      max_tokens: this.options.maxTokens,
-      temperature: this.options.temperature,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: `[SYSTEM: ${proactivePrompts[type]}]`,
-        },
-      ],
-    });
+    try {
+      const client = getAnthropicClient();
+      const response = await client.messages.create({
+        model: this.options.model,
+        max_tokens: this.options.maxTokens,
+        temperature: this.options.temperature,
+        system: systemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: `[SYSTEM: ${proactivePrompts[type]}]`,
+          },
+        ],
+      });
 
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type');
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new Error('Unexpected response type');
+      }
+
+      return content.text;
+    } catch (error) {
+      console.error('[ERROR] Failed to generate proactive message:', error, {
+        type,
+      });
+      throw error;
     }
-
-    return content.text;
   }
 
   /**
