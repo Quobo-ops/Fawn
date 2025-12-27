@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api, Memory } from '@/lib/api';
-import { Search, Brain, Filter } from 'lucide-react';
+import { Search, Brain, ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const CATEGORIES = [
@@ -16,25 +16,34 @@ const CATEGORIES = [
   { value: 'insight', label: 'Insights' },
 ];
 
+const PAGE_SIZE = 20;
+
 export default function MemoriesPage() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [searching, setSearching] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isSearchMode, setIsSearchMode] = useState(false);
 
   useEffect(() => {
-    loadMemories();
+    setPage(0);
+    setIsSearchMode(false);
+    loadMemories(0);
   }, [selectedCategory]);
 
-  async function loadMemories() {
+  async function loadMemories(pageNum: number) {
     setLoading(true);
     try {
       const data = await api.getMemories({
         category: selectedCategory || undefined,
-        limit: 50,
+        limit: PAGE_SIZE,
+        offset: pageNum * PAGE_SIZE,
       });
       setMemories(data.memories);
+      setHasMore(data.memories.length === PAGE_SIZE);
     } catch (error) {
       console.error('Failed to load memories:', error);
     } finally {
@@ -44,19 +53,35 @@ export default function MemoriesPage() {
 
   async function handleSearch() {
     if (!searchQuery.trim()) {
-      loadMemories();
+      setPage(0);
+      setIsSearchMode(false);
+      loadMemories(0);
       return;
     }
 
     setSearching(true);
+    setIsSearchMode(true);
     try {
       const data = await api.searchMemories(searchQuery);
       setMemories(data.results);
+      setHasMore(false);
     } catch (error) {
       console.error('Search failed:', error);
     } finally {
       setSearching(false);
     }
+  }
+
+  function handleNextPage() {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    loadMemories(nextPage);
+  }
+
+  function handlePrevPage() {
+    const prevPage = Math.max(0, page - 1);
+    setPage(prevPage);
+    loadMemories(prevPage);
   }
 
   return (
@@ -120,11 +145,48 @@ export default function MemoriesPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {memories.map((memory) => (
-            <MemoryCard key={memory.id} memory={memory} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-4">
+            {memories.map((memory) => (
+              <MemoryCard key={memory.id} memory={memory} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {!isSearchMode && (
+            <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
+              <button
+                onClick={handlePrevPage}
+                disabled={page === 0}
+                className={clsx(
+                  'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
+                  page === 0
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-gray-700 hover:bg-gray-100'
+                )}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+              <span className="text-sm text-gray-500">
+                Page {page + 1}
+              </span>
+              <button
+                onClick={handleNextPage}
+                disabled={!hasMore}
+                className={clsx(
+                  'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
+                  !hasMore
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-gray-700 hover:bg-gray-100'
+                )}
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

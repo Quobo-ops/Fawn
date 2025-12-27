@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { db, users, assignedPhoneNumbers, conversations, messages, companions, memories, searchMemoriesByEmbedding } from '@fawn/database';
-import { parseIncomingSms, sendSms } from '@fawn/sms';
-import { CompanionEngine, generateEmbedding, serializeEmbedding } from '@fawn/ai';
-import type { CompanionConfig, UserContext, MemoryContext, GoalContext, MessageContext } from '@fawn/ai';
-import { eq, and, desc } from 'drizzle-orm';
+import { db, users, assignedPhoneNumbers, conversations, messages, companions, memories, goals, events, searchMemoriesByEmbedding } from '@fawn/database';
+import { parseIncomingSms, sendSms, validateTwilioWebhook } from '@fawn/sms';
+import { CompanionEngine, generateEmbedding, serializeEmbedding, checkMemoryConflicts } from '@fawn/ai';
+import type { CompanionConfig, UserContext, MemoryContext, GoalContext, EventContext, MessageContext } from '@fawn/ai';
+import { eq, and, desc, gte, lte } from 'drizzle-orm';
 
 export const smsRouter = Router();
 
@@ -12,6 +12,16 @@ export const smsRouter = Router();
  */
 smsRouter.post('/webhook', async (req, res) => {
   try {
+    // Validate Twilio webhook signature
+    const twilioSignature = req.headers['x-twilio-signature'] as string;
+    const webhookUrl = `${process.env.API_BASE_URL}/api/sms/webhook`;
+
+    if (process.env.NODE_ENV === 'production' && !validateTwilioWebhook(twilioSignature, webhookUrl, req.body)) {
+      console.error('Invalid Twilio webhook signature');
+      res.status(403).send('Forbidden');
+      return;
+    }
+
     const incoming = parseIncomingSms(req.body);
     console.log(`Incoming SMS from ${incoming.from}: ${incoming.body}`);
 
@@ -105,10 +115,49 @@ smsRouter.post('/webhook', async (req, res) => {
       intentConfidence: Math.round(response.intent.confidence * 100),
     });
 
-    // Store extracted memories
+    // Store extracted memories with conflict resolution
     if (response.extractedMemories.length > 0) {
       for (const memory of response.extractedMemories) {
         const embedding = await generateEmbedding(memory.content);
+
+        // Check for conflicting memories
+        const existingMemories = await db.query.memories.findMany({
+          where: eq(memories.userId, user.id),
+          columns: { id: true, content: true },
+          limit: 50,
+          orderBy: [desc(memories.importance)],
+        });
+
+        let metadata: Record<string, unknown> = {
+          people: memory.people,
+          emotion: memory.emotion,
+        };
+
+        if (existingMemories.length > 0) {
+          try {
+            const conflicts = await checkMemoryConflicts(memory, existingMemories);
+
+            // Mark superseded memories as less important
+            if (conflicts.supersedes.length > 0) {
+              for (const supersededId of conflicts.supersedes) {
+                await db.update(memories)
+                  .set({
+                    importance: 1,
+                    metadata: { supersededBy: 'new_memory', supersededAt: new Date().toISOString() },
+                  })
+                  .where(eq(memories.id, supersededId));
+              }
+              metadata.supersedes = conflicts.supersedes;
+            }
+
+            if (conflicts.relatedTo.length > 0) {
+              metadata.relatedTo = conflicts.relatedTo;
+            }
+          } catch (error) {
+            console.error('Memory conflict check failed:', error);
+          }
+        }
+
         await db.insert(memories).values({
           userId: user.id,
           content: memory.content,
@@ -117,10 +166,7 @@ smsRouter.post('/webhook', async (req, res) => {
           importance: memory.importance,
           sourceType: 'conversation',
           sourceId: userMessage.id,
-          metadata: {
-            people: memory.people,
-            emotion: memory.emotion,
-          },
+          metadata,
         });
       }
     }
@@ -198,7 +244,54 @@ async function buildUserContext(
     console.error('Memory search failed:', error);
   }
 
-  // TODO: Load active goals, upcoming events
+  // Load active goals
+  const activeGoals: GoalContext[] = [];
+  try {
+    const userGoals = await db.query.goals.findMany({
+      where: and(eq(goals.userId, userId), eq(goals.status, 'active')),
+      orderBy: [desc(goals.priority)],
+      limit: 5,
+    });
+    for (const goal of userGoals) {
+      activeGoals.push({
+        id: goal.id,
+        title: goal.title,
+        type: goal.type,
+        progress: goal.progressPercentage || 0,
+        targetDate: goal.targetDate || undefined,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load goals:', error);
+  }
+
+  // Load upcoming events (next 7 days)
+  const upcomingEvents: EventContext[] = [];
+  try {
+    const now = new Date();
+    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const userEvents = await db.query.events.findMany({
+      where: and(
+        eq(events.userId, userId),
+        eq(events.status, 'scheduled'),
+        gte(events.startTime, now),
+        lte(events.startTime, weekFromNow)
+      ),
+      orderBy: events.startTime,
+      limit: 10,
+    });
+    for (const event of userEvents) {
+      upcomingEvents.push({
+        id: event.id,
+        title: event.title,
+        startTime: event.startTime,
+        endTime: event.endTime || undefined,
+        location: event.location || undefined,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load events:', error);
+  }
 
   return {
     userId,
@@ -207,8 +300,8 @@ async function buildUserContext(
     currentTime: new Date(),
     recentMessages,
     relevantMemories,
-    activeGoals: [],
-    upcomingEvents: [],
+    activeGoals,
+    upcomingEvents,
     recentPeople: [],
   };
 }
