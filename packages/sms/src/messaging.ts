@@ -1,4 +1,5 @@
 import { requireTwilioClient } from './twilio-client';
+import { validateRequest } from 'twilio';
 
 // SMS message limit is 1600 characters for concatenated messages
 const MAX_SMS_LENGTH = 1600;
@@ -183,4 +184,27 @@ export function parseIncomingSms(body: IncomingSmsWebhook) {
     body: body.Body,
     mediaUrls,
   };
+}
+
+/**
+ * Validate an incoming Twilio webhook request
+ * Returns true if the request is authentic, false otherwise
+ */
+export function validateTwilioWebhook(
+  signature: string,
+  url: string,
+  params: Record<string, string>
+): boolean {
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!authToken) {
+    console.error('TWILIO_AUTH_TOKEN not configured, cannot validate webhook');
+    return false;
+  }
+
+  if (!signature) {
+    console.error('Missing X-Twilio-Signature header');
+    return false;
+  }
+
+  return validateRequest(authToken, signature, url, params);
 }

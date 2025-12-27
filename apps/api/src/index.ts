@@ -7,6 +7,8 @@ import { companionsRouter } from './routes/companions';
 import { memoriesRouter } from './routes/memories';
 import { goalsRouter } from './routes/goals';
 import { eventsRouter } from './routes/events';
+import { statsRouter } from './routes/stats';
+import { processPendingReminders } from './workers/reminder-sender';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -29,6 +31,7 @@ app.use('/api/companions', companionsRouter);
 app.use('/api/memories', memoriesRouter);
 app.use('/api/goals', goalsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/stats', statsRouter);
 
 // Error handler
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -41,6 +44,22 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 
 app.listen(port, () => {
   console.log(`Fawn API server running on port ${port}`);
+
+  // Start reminder processing (every minute)
+  const REMINDER_INTERVAL_MS = 60 * 1000;
+  setInterval(async () => {
+    try {
+      const result = await processPendingReminders();
+      if (result.processed > 0) {
+        console.log(`Reminders processed: ${result.sent} sent, ${result.errors} errors`);
+      }
+    } catch (error) {
+      console.error('Reminder processing error:', error);
+    }
+  }, REMINDER_INTERVAL_MS);
+
+  // Run once on startup
+  processPendingReminders().catch(console.error);
 });
 
 export { app };

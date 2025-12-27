@@ -110,11 +110,12 @@ class ApiClient {
     );
   }
 
-  async getMemories(options?: { category?: string; limit?: number }) {
+  async getMemories(options?: { category?: string; limit?: number; offset?: number }) {
     const params = new URLSearchParams();
     if (options?.category) params.set('category', options.category);
     if (options?.limit) params.set('limit', String(options.limit));
-    return this.request<{ memories: Memory[] }>(
+    if (options?.offset) params.set('offset', String(options.offset));
+    return this.request<{ memories: Memory[]; pagination: { limit: number; offset: number } }>(
       `/api/memories?${params.toString()}`
     );
   }
@@ -159,6 +160,19 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  // Stats
+  async getStats() {
+    return this.request<DashboardStats>('/api/stats');
+  }
+
+  async getMemoryStats() {
+    return this.request<MemoryStats>('/api/stats/memories');
+  }
+
+  async getGoalStats() {
+    return this.request<GoalStats>('/api/stats/goals');
   }
 }
 
@@ -238,4 +252,27 @@ export interface Event {
   endTime?: string;
   location?: string;
   status: string;
+}
+
+export interface DashboardStats {
+  messages: {
+    total: number;
+    lastWeek: number;
+  };
+  conversations: number;
+  memories: number;
+  activeGoals: number;
+}
+
+export interface MemoryStats {
+  total: number;
+  byCategory: Record<string, number>;
+}
+
+export interface GoalStats {
+  total: number;
+  active: number;
+  completed: number;
+  paused: number;
+  abandoned: number;
 }

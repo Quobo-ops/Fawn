@@ -44,9 +44,10 @@ usersRouter.post('/register', async (req, res) => {
     // Hash password (stored separately in production)
     const passwordHash = await bcrypt.hash(data.password, 10);
 
-    // Create user
+    // Create user with password hash
     const [user] = await db.insert(users).values({
       email: data.email,
+      passwordHash,
       name: data.name,
       phoneNumber: data.phoneNumber,
       timezone: data.timezone || 'UTC',
@@ -78,35 +79,51 @@ usersRouter.post('/register', async (req, res) => {
     });
 
     // Provision a Twilio phone number
-    const webhookUrl = `${process.env.API_BASE_URL}/api/sms/webhook`;
+    let companionNumber: string | null = null;
+    let provisioningError: string | null = null;
 
-    const availableNumbers = await searchAvailableNumbers({
-      country: 'US',
-      smsCapable: true,
-    });
+    try {
+      const webhookUrl = `${process.env.API_BASE_URL}/api/sms/webhook`;
 
-    if (availableNumbers.length === 0) {
-      // Still create the account, but without a number
-      console.error('No phone numbers available');
-    } else {
-      const provisionedNumber = await provisionPhoneNumber(
-        availableNumbers[0].phoneNumber,
-        webhookUrl,
-        `Fawn - ${user.email}`
-      );
-
-      await db.insert(assignedPhoneNumbers).values({
-        userId: user.id,
-        phoneNumber: provisionedNumber.phoneNumber,
-        twilioSid: provisionedNumber.sid,
+      const availableNumbers = await searchAvailableNumbers({
+        country: 'US',
+        smsCapable: true,
       });
 
-      // Send welcome message
-      await sendSms({
-        from: provisionedNumber.phoneNumber,
-        to: data.phoneNumber,
-        body: `Hey! I'm Fawn, your new AI companion. Save this number - this is where we'll chat. You can tell me about your day, set goals, schedule things, or just talk. I'm here whenever you need me. What's on your mind?`,
-      });
+      if (availableNumbers.length === 0) {
+        provisioningError = 'No phone numbers available';
+        console.error('No phone numbers available for user:', user.id);
+      } else {
+        const provisionedNumber = await provisionPhoneNumber(
+          availableNumbers[0].phoneNumber,
+          webhookUrl,
+          `Fawn - ${user.email}`
+        );
+
+        await db.insert(assignedPhoneNumbers).values({
+          userId: user.id,
+          phoneNumber: provisionedNumber.phoneNumber,
+          twilioSid: provisionedNumber.sid,
+        });
+
+        companionNumber = provisionedNumber.phoneNumber;
+
+        // Send welcome message
+        try {
+          await sendSms({
+            from: provisionedNumber.phoneNumber,
+            to: data.phoneNumber,
+            body: `Hey! I'm Fawn, your new AI companion. Save this number - this is where we'll chat. You can tell me about your day, set goals, schedule things, or just talk. I'm here whenever you need me. What's on your mind?`,
+          });
+        } catch (smsError) {
+          console.error('Failed to send welcome SMS:', smsError);
+          // Don't fail registration if welcome SMS fails
+        }
+      }
+    } catch (error) {
+      provisioningError = 'Phone provisioning failed';
+      console.error('Phone number provisioning failed:', error);
+      // Continue without a number - user can retry later
     }
 
     // Generate JWT
@@ -121,8 +138,10 @@ usersRouter.post('/register', async (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
+        companionNumber,
       },
       token,
+      provisioningError,
     });
 
   } catch (error) {
@@ -151,8 +170,12 @@ usersRouter.post('/login', async (req, res) => {
       return;
     }
 
-    // In production, verify password hash
-    // For now, simplified
+    // Verify password hash
+    const passwordValid = await bcrypt.compare(data.password, user.passwordHash);
+    if (!passwordValid) {
+      res.status(401).json({ error: 'Invalid credentials' });
+      return;
+    }
 
     const token = jwt.sign(
       { userId: user.id, email: user.email },
