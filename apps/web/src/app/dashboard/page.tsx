@@ -1,26 +1,29 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, UserProfile, Goal, Memory } from '@/lib/api';
+import { api, UserProfile, Goal, Memory, DashboardStats } from '@/lib/api';
 import { MessageCircle, Brain, Target, Phone } from 'lucide-react';
 
 export default function DashboardPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [recentMemories, setRecentMemories] = useState<Memory[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [profileData, goalsData, memoriesData] = await Promise.all([
+        const [profileData, goalsData, memoriesData, statsData] = await Promise.all([
           api.getMe(),
           api.getGoals('active'),
           api.getMemories({ limit: 5 }),
+          api.getStats(),
         ]);
         setProfile(profileData);
         setGoals(goalsData.goals);
         setRecentMemories(memoriesData.memories);
+        setStats(statsData);
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
       } finally {
@@ -67,20 +70,20 @@ export default function DashboardPage() {
       <div className="grid md:grid-cols-3 gap-6 mb-8">
         <StatCard
           icon={<MessageCircle className="w-5 h-5 text-fawn-500" />}
-          label="Conversations"
-          value="—"
-          sublabel="messages exchanged"
+          label="Messages"
+          value={stats?.messages.total.toString() || '0'}
+          sublabel={`${stats?.messages.lastWeek || 0} this week`}
         />
         <StatCard
           icon={<Brain className="w-5 h-5 text-fawn-500" />}
           label="Memories"
-          value={recentMemories.length.toString()}
+          value={stats?.memories.toString() || '0'}
           sublabel="facts remembered"
         />
         <StatCard
           icon={<Target className="w-5 h-5 text-fawn-500" />}
           label="Active Goals"
-          value={goals.length.toString()}
+          value={stats?.activeGoals.toString() || '0'}
           sublabel="in progress"
         />
       </div>
