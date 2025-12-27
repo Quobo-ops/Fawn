@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { db, users, assignedPhoneNumbers, conversations, messages, companions, memories, goals, events, searchMemoriesByEmbedding } from '@fawn/database';
+import { db, users, assignedPhoneNumbers, conversations, messages, companions, memories, goals, events, searchMemoriesByEmbedding, userKnowledgeProfiles } from '@fawn/database';
 import { parseIncomingSms, sendSms, validateTwilioWebhook } from '@fawn/sms';
-import { CompanionEngine, generateEmbedding, serializeEmbedding, checkMemoryConflicts } from '@fawn/ai';
-import type { CompanionConfig, UserContext, MemoryContext, GoalContext, EventContext, MessageContext } from '@fawn/ai';
+import { CompanionEngine, generateEmbedding, serializeEmbedding, checkMemoryConflicts, buildOnboardingContext } from '@fawn/ai';
+import type { CompanionConfig, UserContext, MemoryContext, GoalContext, EventContext, MessageContext, OnboardingContext as OnboardingContextType } from '@fawn/ai';
 import { eq, and, desc, gte, lte, or } from 'drizzle-orm';
 
 export const smsRouter = Router();
@@ -260,6 +260,9 @@ smsRouter.post('/webhook', async (req, res) => {
       // Non-critical, continue
     }
 
+    // Update knowledge profile (track onboarding progress)
+    await updateKnowledgeProfile(user.id);
+
     // Send SMS response
     try {
       await sendSms({
@@ -423,6 +426,9 @@ async function buildUserContext(
     console.error(`[ERROR] Failed to load events for user ${userId}:`, error);
   }
 
+  // Build onboarding context
+  const onboarding = await buildOnboardingContextForUser(userId);
+
   return {
     userId,
     userName: user.name || undefined,
@@ -432,8 +438,145 @@ async function buildUserContext(
     relevantMemories,
     activeGoals,
     upcomingEvents,
-    recentPeople: [], // TODO: Implement people tracking
+    recentPeople: [],
+    onboarding,
   };
+}
+
+/**
+ * Build onboarding context for a user based on their memories and message history.
+ */
+async function buildOnboardingContextForUser(userId: string): Promise<OnboardingContextType> {
+  // Get or create knowledge profile
+  let knowledgeProfile = await db.query.userKnowledgeProfiles.findFirst({
+    where: eq(userKnowledgeProfiles.userId, userId),
+  });
+
+  if (!knowledgeProfile) {
+    // Create new profile for new user
+    const [newProfile] = await db.insert(userKnowledgeProfiles).values({
+      userId,
+      onboardingPhase: 'new',
+      totalMessageCount: 0,
+      knowledgeScores: {},
+      askedQuestions: [],
+    }).returning();
+    knowledgeProfile = newProfile;
+  }
+
+  // Fetch all user memories for knowledge calculation
+  const userMemories = await db.query.memories.findMany({
+    where: eq(memories.userId, userId),
+  });
+
+  // Convert to format expected by knowledge profile calculator
+  const memoriesForAnalysis = userMemories.map((m) => ({
+    content: m.content,
+    category: m.category,
+    subcategory: m.subcategory || undefined,
+    importance: m.importance || 5,
+    createdAt: m.createdAt,
+  }));
+
+  // Get recently asked questions to avoid repetition
+  const askedQuestions = (knowledgeProfile.askedQuestions || []) as Array<{
+    questionText: string;
+    knowledgeArea: string;
+    askedAt: string;
+  }>;
+  const recentlyAskedQuestions = askedQuestions
+    .filter((q) => {
+      // Only consider questions asked in the last 24 hours
+      const askedAt = new Date(q.askedAt);
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return askedAt > dayAgo;
+    })
+    .map((q) => q.questionText);
+
+  const recentlyAskedAreas = askedQuestions
+    .filter((q) => {
+      const askedAt = new Date(q.askedAt);
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      return askedAt > dayAgo;
+    })
+    .map((q) => q.knowledgeArea);
+
+  // Build the context
+  const onboardingData = buildOnboardingContext(
+    knowledgeProfile.totalMessageCount,
+    memoriesForAnalysis,
+    recentlyAskedQuestions,
+    recentlyAskedAreas
+  );
+
+  // Convert to the format expected by the types
+  const result: OnboardingContextType = {
+    phase: onboardingData.phase,
+    messageCount: onboardingData.messageCount,
+    overallKnowledgeLevel: onboardingData.overallKnowledgeLevel,
+    topGaps: onboardingData.topGaps.map((gap) => ({
+      area: gap.area,
+      areaLabel: gap.areaLabel,
+      currentScore: gap.currentScore,
+      priority: gap.priority,
+    })),
+  };
+
+  if (onboardingData.suggestedQuestion) {
+    result.suggestedQuestion = {
+      question: onboardingData.suggestedQuestion.question,
+      area: onboardingData.suggestedQuestion.area,
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Update the knowledge profile after a message exchange.
+ */
+async function updateKnowledgeProfile(userId: string): Promise<void> {
+  try {
+    // Get or create profile
+    let profile = await db.query.userKnowledgeProfiles.findFirst({
+      where: eq(userKnowledgeProfiles.userId, userId),
+    });
+
+    if (!profile) {
+      await db.insert(userKnowledgeProfiles).values({
+        userId,
+        onboardingPhase: 'new',
+        totalMessageCount: 1,
+        knowledgeScores: {},
+        askedQuestions: [],
+      });
+      return;
+    }
+
+    // Increment message count
+    const newCount = (profile.totalMessageCount || 0) + 1;
+
+    // Determine new phase based on message count
+    let newPhase: 'new' | 'getting_acquainted' | 'familiar' | 'established' = 'new';
+    if (newCount >= 100) {
+      newPhase = 'established';
+    } else if (newCount >= 25) {
+      newPhase = 'familiar';
+    } else if (newCount >= 5) {
+      newPhase = 'getting_acquainted';
+    }
+
+    await db.update(userKnowledgeProfiles)
+      .set({
+        totalMessageCount: newCount,
+        onboardingPhase: newPhase,
+        lastKnowledgeUpdateAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(userKnowledgeProfiles.userId, userId));
+  } catch (error) {
+    console.error('Failed to update knowledge profile:', error);
+  }
 }
 
 function defaultPersonality(): CompanionConfig['personality'] {
