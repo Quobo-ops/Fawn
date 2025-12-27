@@ -2,7 +2,7 @@ import { pgTable, uuid, text, timestamp, jsonb, integer, boolean, index } from '
 import { users } from './users';
 
 // SMS conversation threads
-export const conversations = pgTable('conversations', {
+export const conversations = pgTable('fawn_conversations', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
 
@@ -22,7 +22,7 @@ export const conversations = pgTable('conversations', {
 }));
 
 // Individual messages in the conversation
-export const messages = pgTable('messages', {
+export const messages = pgTable('fawn_messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   conversationId: uuid('conversation_id').references(() => conversations.id).notNull(),
   userId: uuid('user_id').references(() => users.id).notNull(),
@@ -61,7 +61,7 @@ export const messages = pgTable('messages', {
 }));
 
 // Quick replies / suggested responses
-export const suggestedReplies = pgTable('suggested_replies', {
+export const suggestedReplies = pgTable('fawn_suggested_replies', {
   id: uuid('id').primaryKey().defaultRandom(),
   messageId: uuid('message_id').references(() => messages.id).notNull(),
   content: text('content').notNull(),

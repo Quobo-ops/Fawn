@@ -4,7 +4,7 @@ import { users } from './users';
 
 // Core memory storage with vector embeddings
 // This is where the "whole life context" lives
-export const memories = pgTable('memories', {
+export const memories = pgTable('fawn_memories', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
 
@@ -45,7 +45,7 @@ export const memories = pgTable('memories', {
 }));
 
 // Memory connections - how memories relate to each other
-export const memoryConnections = pgTable('memory_connections', {
+export const memoryConnections = pgTable('fawn_memory_connections', {
   id: uuid('id').primaryKey().defaultRandom(),
   memoryId: uuid('memory_id').references(() => memories.id).notNull(),
   relatedMemoryId: uuid('related_memory_id').references(() => memories.id).notNull(),
@@ -55,7 +55,7 @@ export const memoryConnections = pgTable('memory_connections', {
 });
 
 // Periodic summaries - compressed context for different time windows
-export const memorySummaries = pgTable('memory_summaries', {
+export const memorySummaries = pgTable('fawn_memory_summaries', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
   periodType: text('period_type').notNull(), // 'daily', 'weekly', 'monthly', 'yearly'
@@ -69,7 +69,7 @@ export const memorySummaries = pgTable('memory_summaries', {
 });
 
 // Life areas - domains of the user's life
-export const lifeAreas = pgTable('life_areas', {
+export const lifeAreas = pgTable('fawn_life_areas', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
   name: text('name').notNull(),

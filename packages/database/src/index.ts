@@ -45,7 +45,7 @@ export async function searchMemoriesByEmbedding(
     SELECT
       id, content, category, importance, metadata, tags,
       1 - (embedding::vector <=> $1::vector) as similarity
-    FROM memories
+    FROM fawn_memories
     WHERE user_id = $2
       AND embedding IS NOT NULL
       AND 1 - (embedding::vector <=> $1::vector) > $3
@@ -64,7 +64,7 @@ export async function searchMemoriesByText(
 ) {
   const result = await getPool().query(`
     SELECT id, content, category, importance, metadata, tags
-    FROM memories
+    FROM fawn_memories
     WHERE user_id = $1
       AND content ILIKE $2
     ORDER BY importance DESC, created_at DESC

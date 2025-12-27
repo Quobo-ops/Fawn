@@ -58,7 +58,12 @@ export async function generateMemorySummaries(userId: string): Promise<{
         }
 
         // Generate summary using Claude
-        const summary = await generateSummary(periodMemories, period);
+        const memoryData = periodMemories.map((m) => ({
+          content: m.content,
+          category: m.category,
+          importance: m.importance ?? 5,
+        }));
+        const summary = await generateSummary(memoryData, period);
 
         // Generate embedding for the summary
         const embedding = await generateEmbedding(summary.text);

@@ -214,6 +214,10 @@ usersRouter.post('/login', async (req, res) => {
     }
 
     // Verify password hash
+    if (!user.passwordHash) {
+      res.status(401).json({ error: 'Invalid credentials' });
+      return;
+    }
     const passwordValid = await bcrypt.compare(data.password, user.passwordHash);
     if (!passwordValid) {
       res.status(401).json({ error: 'Invalid credentials' });

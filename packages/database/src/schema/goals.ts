@@ -3,7 +3,7 @@ import { users } from './users';
 import { lifeAreas } from './memories';
 
 // Goals - what you're working towards
-export const goals = pgTable('goals', {
+export const goals = pgTable('fawn_goals', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
   lifeAreaId: uuid('life_area_id').references(() => lifeAreas.id),
@@ -52,7 +52,7 @@ export const goals = pgTable('goals', {
 }));
 
 // Goal progress entries
-export const goalProgress = pgTable('goal_progress', {
+export const goalProgress = pgTable('fawn_goal_progress', {
   id: uuid('id').primaryKey().defaultRandom(),
   goalId: uuid('goal_id').references(() => goals.id).notNull(),
   userId: uuid('user_id').references(() => users.id).notNull(),
@@ -74,7 +74,7 @@ export const goalProgress = pgTable('goal_progress', {
 }));
 
 // Goal milestones / sub-goals
-export const goalMilestones = pgTable('goal_milestones', {
+export const goalMilestones = pgTable('fawn_goal_milestones', {
   id: uuid('id').primaryKey().defaultRandom(),
   goalId: uuid('goal_id').references(() => goals.id).notNull(),
 
@@ -88,7 +88,7 @@ export const goalMilestones = pgTable('goal_milestones', {
 });
 
 // Habits - recurring behaviors (special type of goal)
-export const habits = pgTable('habits', {
+export const habits = pgTable('fawn_habits', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
   goalId: uuid('goal_id').references(() => goals.id),
@@ -117,7 +117,7 @@ export const habits = pgTable('habits', {
 });
 
 // Habit completions
-export const habitCompletions = pgTable('habit_completions', {
+export const habitCompletions = pgTable('fawn_habit_completions', {
   id: uuid('id').primaryKey().defaultRandom(),
   habitId: uuid('habit_id').references(() => habits.id).notNull(),
   completedAt: timestamp('completed_at').defaultNow().notNull(),

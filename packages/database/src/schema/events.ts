@@ -2,7 +2,7 @@ import { pgTable, uuid, text, timestamp, jsonb, boolean, integer, index } from '
 import { users } from './users';
 
 // Events and scheduled items
-export const events = pgTable('events', {
+export const events = pgTable('fawn_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
 
@@ -54,7 +54,7 @@ export const events = pgTable('events', {
 }));
 
 // Tasks - items that need to be done (no specific time)
-export const tasks = pgTable('tasks', {
+export const tasks = pgTable('fawn_tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
 
@@ -95,7 +95,7 @@ export const tasks = pgTable('tasks', {
 }));
 
 // Reminders - proactive check-ins from the companion
-export const reminders = pgTable('reminders', {
+export const reminders = pgTable('fawn_reminders', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
 

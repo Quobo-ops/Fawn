@@ -2,7 +2,7 @@ import { pgTable, uuid, text, timestamp, jsonb, integer, date, index } from 'dri
 import { users } from './users';
 
 // People in the user's life
-export const people = pgTable('people', {
+export const people = pgTable('fawn_people', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull(),
 
@@ -45,7 +45,7 @@ export const people = pgTable('people', {
 }));
 
 // Relationship notes - observations about interactions
-export const relationshipNotes = pgTable('relationship_notes', {
+export const relationshipNotes = pgTable('fawn_relationship_notes', {
   id: uuid('id').primaryKey().defaultRandom(),
   personId: uuid('person_id').references(() => people.id).notNull(),
   userId: uuid('user_id').references(() => users.id).notNull(),
@@ -61,7 +61,7 @@ export const relationshipNotes = pgTable('relationship_notes', {
 });
 
 // Gift ideas and preferences for people
-export const personPreferences = pgTable('person_preferences', {
+export const personPreferences = pgTable('fawn_person_preferences', {
   id: uuid('id').primaryKey().defaultRandom(),
   personId: uuid('person_id').references(() => people.id).notNull(),
 

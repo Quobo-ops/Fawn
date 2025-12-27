@@ -40,6 +40,7 @@ async function seed() {
   const [user] = await db.insert(users).values({
     email: 'brennen@example.com', // Update this
     name: 'Brennen',
+    passwordHash: '$2b$10$dummy.placeholder.hash.for.seeding',
     phoneNumber: userPhoneNumber,
     timezone: 'America/Los_Angeles', // Update to your timezone
     onboardingComplete: true,

@@ -11,7 +11,7 @@ export type OnboardingPhase = 'new' | 'getting_acquainted' | 'familiar' | 'estab
  * Tracks the AI's knowledge about each user across different life areas.
  * This enables the AI to know what it knows and what gaps to fill.
  */
-export const userKnowledgeProfiles = pgTable('user_knowledge_profiles', {
+export const userKnowledgeProfiles = pgTable('fawn_user_knowledge_profiles', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id).notNull().unique(),
 
@@ -40,7 +40,7 @@ export const userKnowledgeProfiles = pgTable('user_knowledge_profiles', {
  * Suggested questions the AI can ask to fill knowledge gaps.
  * Pre-defined questions organized by knowledge area.
  */
-export const onboardingQuestions = pgTable('onboarding_questions', {
+export const onboardingQuestions = pgTable('fawn_onboarding_questions', {
   id: uuid('id').primaryKey().defaultRandom(),
 
   // Which knowledge area this question helps fill
