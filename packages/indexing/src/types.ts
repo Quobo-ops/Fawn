@@ -8,7 +8,7 @@
 
 /**
  * Major life domains - the letter prefix in index codes
- * Each domain contains multiple specific topics
+ * Each domain contains multiple specific topics (A-Z = 26 domains)
  */
 export type IndexDomain =
   | 'A' // Identity & Core Self
@@ -20,7 +20,23 @@ export type IndexDomain =
   | 'G' // Life Events & History
   | 'H' // Preferences & Interests
   | 'I' // Communication & Expression
-  | 'J'; // Challenges & Growth
+  | 'J' // Challenges & Growth
+  | 'K' // Knowledge & Learning
+  | 'L' // Lifestyle & Routines
+  | 'M' // Money & Finances
+  | 'N' // Nature & Environment
+  | 'O' // Opinions & Perspectives
+  | 'P' // Personality Quirks
+  | 'Q' // Questions & Curiosities
+  | 'R' // Recreation & Leisure
+  | 'S' // Spirituality & Meaning
+  | 'T' // Technology & Digital
+  | 'U' // Uncertainties & Fears
+  | 'V' // Values & Ethics
+  | 'W' // Work Style & Productivity
+  | 'X' // eXperiences Sought
+  | 'Y' // Yearnings & Desires
+  | 'Z'; // Zones of Comfort
 
 /**
  * Full index code combining domain letter and topic number

@@ -6,7 +6,7 @@
  * that the companion can reference during conversations.
  *
  * Naming Convention:
- * - Letter (A-J): Major life domain
+ * - Letter (A-Z): Major life domain (26 domains total)
  * - Numbers (001-999): Specific topic within domain
  *
  * Example: B003 = Relationships & Social > Friendships
@@ -15,7 +15,7 @@
 import type { IndexCategory, IndexDomain, IndexCode } from './types';
 
 /**
- * Domain metadata
+ * Domain metadata - 26 life domains (A-Z)
  */
 export const DOMAINS: Record<IndexDomain, { name: string; description: string; icon: string }> = {
   A: {
@@ -67,6 +67,86 @@ export const DOMAINS: Record<IndexDomain, { name: string; description: string; i
     name: 'Challenges & Growth',
     description: 'Current struggles, areas for improvement, lessons learned, and growth edges',
     icon: '🌱',
+  },
+  K: {
+    name: 'Knowledge & Learning',
+    description: 'Education history, learning style, intellectual interests, and skill development',
+    icon: '📚',
+  },
+  L: {
+    name: 'Lifestyle & Routines',
+    description: 'Daily habits, schedules, living situation, and lifestyle choices',
+    icon: '🏠',
+  },
+  M: {
+    name: 'Money & Finances',
+    description: 'Financial situation, money attitudes, spending habits, and financial goals',
+    icon: '💰',
+  },
+  N: {
+    name: 'Nature & Environment',
+    description: 'Connection to nature, environmental values, living space, and outdoor preferences',
+    icon: '🌿',
+  },
+  O: {
+    name: 'Opinions & Perspectives',
+    description: 'Views on various topics, political/social stances, and worldly perspectives',
+    icon: '🗣️',
+  },
+  P: {
+    name: 'Personality Quirks',
+    description: 'Unique traits, idiosyncrasies, pet peeves, and distinctive characteristics',
+    icon: '✨',
+  },
+  Q: {
+    name: 'Questions & Curiosities',
+    description: 'Things they wonder about, unresolved questions, and areas of inquiry',
+    icon: '❓',
+  },
+  R: {
+    name: 'Recreation & Leisure',
+    description: 'How they spend free time, relaxation methods, and leisure activities',
+    icon: '🎮',
+  },
+  S: {
+    name: 'Spirituality & Meaning',
+    description: 'Spiritual beliefs, sense of purpose, existential views, and meaning-making',
+    icon: '🕯️',
+  },
+  T: {
+    name: 'Technology & Digital',
+    description: 'Tech habits, online presence, digital preferences, and relationship with technology',
+    icon: '📱',
+  },
+  U: {
+    name: 'Uncertainties & Fears',
+    description: 'Anxieties, worries, fears, and sources of uncertainty in life',
+    icon: '😰',
+  },
+  V: {
+    name: 'Values & Ethics',
+    description: 'Moral compass, ethical stances, principles, and what they stand for',
+    icon: '⚖️',
+  },
+  W: {
+    name: 'Work Style & Productivity',
+    description: 'How they work best, productivity patterns, focus habits, and work preferences',
+    icon: '⚙️',
+  },
+  X: {
+    name: 'eXperiences Sought',
+    description: 'Bucket list items, adventures wanted, experiences they crave',
+    icon: '🎢',
+  },
+  Y: {
+    name: 'Yearnings & Desires',
+    description: 'Deep wants, unfulfilled desires, wishes, and longings',
+    icon: '💫',
+  },
+  Z: {
+    name: 'Zones of Comfort',
+    description: 'Safe spaces, comfort activities, security needs, and what grounds them',
+    icon: '🛋️',
   },
 };
 
@@ -563,6 +643,790 @@ export const CATEGORIES: IndexCategory[] = [
     topicName: 'Support Needs',
     description: 'Types of support they currently need most',
     priority: 9,
+  },
+
+  // ============================================
+  // K: Knowledge & Learning
+  // ============================================
+  {
+    code: 'K001',
+    domain: 'K',
+    domainName: 'Knowledge & Learning',
+    topicNumber: '001',
+    topicName: 'Education History',
+    description: 'Formal education, degrees, schools attended, and academic background',
+    priority: 6,
+  },
+  {
+    code: 'K002',
+    domain: 'K',
+    domainName: 'Knowledge & Learning',
+    topicNumber: '002',
+    topicName: 'Learning Style',
+    description: 'How they learn best - visual, auditory, hands-on, reading, etc.',
+    priority: 7,
+  },
+  {
+    code: 'K003',
+    domain: 'K',
+    domainName: 'Knowledge & Learning',
+    topicNumber: '003',
+    topicName: 'Current Studies',
+    description: 'What they are actively learning or studying right now',
+    priority: 8,
+  },
+  {
+    code: 'K004',
+    domain: 'K',
+    domainName: 'Knowledge & Learning',
+    topicNumber: '004',
+    topicName: 'Expertise Areas',
+    description: 'Topics they know deeply and could teach others',
+    priority: 7,
+  },
+  {
+    code: 'K005',
+    domain: 'K',
+    domainName: 'Knowledge & Learning',
+    topicNumber: '005',
+    topicName: 'Learning Goals',
+    description: 'Skills or knowledge they want to acquire',
+    priority: 7,
+  },
+
+  // ============================================
+  // L: Lifestyle & Routines
+  // ============================================
+  {
+    code: 'L001',
+    domain: 'L',
+    domainName: 'Lifestyle & Routines',
+    topicNumber: '001',
+    topicName: 'Daily Routine',
+    description: 'Typical daily schedule, morning and evening routines',
+    priority: 7,
+  },
+  {
+    code: 'L002',
+    domain: 'L',
+    domainName: 'Lifestyle & Routines',
+    topicNumber: '002',
+    topicName: 'Living Situation',
+    description: 'Where and how they live - home, roommates, location',
+    priority: 6,
+  },
+  {
+    code: 'L003',
+    domain: 'L',
+    domainName: 'Lifestyle & Routines',
+    topicNumber: '003',
+    topicName: 'Weekly Patterns',
+    description: 'How their week is typically structured, recurring activities',
+    priority: 6,
+  },
+  {
+    code: 'L004',
+    domain: 'L',
+    domainName: 'Lifestyle & Routines',
+    topicNumber: '004',
+    topicName: 'Lifestyle Values',
+    description: 'What kind of lifestyle they aspire to or prioritize',
+    priority: 7,
+  },
+  {
+    code: 'L005',
+    domain: 'L',
+    domainName: 'Lifestyle & Routines',
+    topicNumber: '005',
+    topicName: 'Time Management',
+    description: 'How they manage time, scheduling preferences, punctuality',
+    priority: 6,
+  },
+
+  // ============================================
+  // M: Money & Finances
+  // ============================================
+  {
+    code: 'M001',
+    domain: 'M',
+    domainName: 'Money & Finances',
+    topicNumber: '001',
+    topicName: 'Financial Situation',
+    description: 'General financial status and stability',
+    priority: 7,
+  },
+  {
+    code: 'M002',
+    domain: 'M',
+    domainName: 'Money & Finances',
+    topicNumber: '002',
+    topicName: 'Money Attitudes',
+    description: 'Relationship with money, beliefs about wealth, spending vs saving',
+    priority: 8,
+  },
+  {
+    code: 'M003',
+    domain: 'M',
+    domainName: 'Money & Finances',
+    topicNumber: '003',
+    topicName: 'Financial Goals',
+    description: 'Savings goals, investment plans, financial aspirations',
+    priority: 7,
+  },
+  {
+    code: 'M004',
+    domain: 'M',
+    domainName: 'Money & Finances',
+    topicNumber: '004',
+    topicName: 'Spending Patterns',
+    description: 'What they spend money on, budgeting habits',
+    priority: 6,
+  },
+  {
+    code: 'M005',
+    domain: 'M',
+    domainName: 'Money & Finances',
+    topicNumber: '005',
+    topicName: 'Financial Stressors',
+    description: 'Money-related worries, debts, or financial challenges',
+    priority: 8,
+  },
+
+  // ============================================
+  // N: Nature & Environment
+  // ============================================
+  {
+    code: 'N001',
+    domain: 'N',
+    domainName: 'Nature & Environment',
+    topicNumber: '001',
+    topicName: 'Nature Connection',
+    description: 'Relationship with nature, outdoor activities, time in nature',
+    priority: 6,
+  },
+  {
+    code: 'N002',
+    domain: 'N',
+    domainName: 'Nature & Environment',
+    topicNumber: '002',
+    topicName: 'Environmental Values',
+    description: 'Environmental consciousness, sustainability practices',
+    priority: 6,
+  },
+  {
+    code: 'N003',
+    domain: 'N',
+    domainName: 'Nature & Environment',
+    topicNumber: '003',
+    topicName: 'Physical Environment',
+    description: 'Preferences for their living/working environment, organization',
+    priority: 7,
+  },
+  {
+    code: 'N004',
+    domain: 'N',
+    domainName: 'Nature & Environment',
+    topicNumber: '004',
+    topicName: 'Pets & Animals',
+    description: 'Relationship with animals, pets they have or want',
+    priority: 6,
+  },
+  {
+    code: 'N005',
+    domain: 'N',
+    domainName: 'Nature & Environment',
+    topicNumber: '005',
+    topicName: 'Ideal Setting',
+    description: 'Where they feel most at peace - city, country, beach, mountains',
+    priority: 6,
+  },
+
+  // ============================================
+  // O: Opinions & Perspectives
+  // ============================================
+  {
+    code: 'O001',
+    domain: 'O',
+    domainName: 'Opinions & Perspectives',
+    topicNumber: '001',
+    topicName: 'Political Views',
+    description: 'Political leanings, civic engagement, and political opinions',
+    priority: 5,
+  },
+  {
+    code: 'O002',
+    domain: 'O',
+    domainName: 'Opinions & Perspectives',
+    topicNumber: '002',
+    topicName: 'Social Issues',
+    description: 'Views on social issues, causes they care about',
+    priority: 6,
+  },
+  {
+    code: 'O003',
+    domain: 'O',
+    domainName: 'Opinions & Perspectives',
+    topicNumber: '003',
+    topicName: 'Controversial Topics',
+    description: 'Where they stand on debated topics',
+    priority: 5,
+  },
+  {
+    code: 'O004',
+    domain: 'O',
+    domainName: 'Opinions & Perspectives',
+    topicNumber: '004',
+    topicName: 'World Events',
+    description: 'How they view and engage with current events',
+    priority: 5,
+  },
+  {
+    code: 'O005',
+    domain: 'O',
+    domainName: 'Opinions & Perspectives',
+    topicNumber: '005',
+    topicName: 'Strong Beliefs',
+    description: 'Topics they feel strongly about and are vocal on',
+    priority: 7,
+  },
+
+  // ============================================
+  // P: Personality Quirks
+  // ============================================
+  {
+    code: 'P001',
+    domain: 'P',
+    domainName: 'Personality Quirks',
+    topicNumber: '001',
+    topicName: 'Unique Habits',
+    description: 'Distinctive habits and behaviors that define them',
+    priority: 6,
+  },
+  {
+    code: 'P002',
+    domain: 'P',
+    domainName: 'Personality Quirks',
+    topicNumber: '002',
+    topicName: 'Pet Peeves',
+    description: 'Things that annoy or bother them',
+    priority: 7,
+  },
+  {
+    code: 'P003',
+    domain: 'P',
+    domainName: 'Personality Quirks',
+    topicNumber: '003',
+    topicName: 'Superstitions & Rituals',
+    description: 'Personal superstitions, rituals, or quirky beliefs',
+    priority: 5,
+  },
+  {
+    code: 'P004',
+    domain: 'P',
+    domainName: 'Personality Quirks',
+    topicNumber: '004',
+    topicName: 'Guilty Pleasures',
+    description: 'Things they enjoy but might be embarrassed about',
+    priority: 5,
+  },
+  {
+    code: 'P005',
+    domain: 'P',
+    domainName: 'Personality Quirks',
+    topicNumber: '005',
+    topicName: 'Idiosyncrasies',
+    description: 'Unusual preferences or behaviors that make them unique',
+    priority: 6,
+  },
+
+  // ============================================
+  // Q: Questions & Curiosities
+  // ============================================
+  {
+    code: 'Q001',
+    domain: 'Q',
+    domainName: 'Questions & Curiosities',
+    topicNumber: '001',
+    topicName: 'Life Questions',
+    description: 'Big questions they ponder about life, meaning, existence',
+    priority: 7,
+  },
+  {
+    code: 'Q002',
+    domain: 'Q',
+    domainName: 'Questions & Curiosities',
+    topicNumber: '002',
+    topicName: 'Unresolved Mysteries',
+    description: 'Personal mysteries or questions they wish they had answers to',
+    priority: 6,
+  },
+  {
+    code: 'Q003',
+    domain: 'Q',
+    domainName: 'Questions & Curiosities',
+    topicNumber: '003',
+    topicName: 'Intellectual Curiosities',
+    description: 'Topics that fascinate them and spark their curiosity',
+    priority: 6,
+  },
+  {
+    code: 'Q004',
+    domain: 'Q',
+    domainName: 'Questions & Curiosities',
+    topicNumber: '004',
+    topicName: 'Self-Inquiry',
+    description: 'Questions they have about themselves, self-exploration',
+    priority: 7,
+  },
+  {
+    code: 'Q005',
+    domain: 'Q',
+    domainName: 'Questions & Curiosities',
+    topicNumber: '005',
+    topicName: 'Future Unknowns',
+    description: 'What they wonder about regarding their future',
+    priority: 7,
+  },
+
+  // ============================================
+  // R: Recreation & Leisure
+  // ============================================
+  {
+    code: 'R001',
+    domain: 'R',
+    domainName: 'Recreation & Leisure',
+    topicNumber: '001',
+    topicName: 'Free Time Activities',
+    description: 'How they spend free time when they have it',
+    priority: 6,
+  },
+  {
+    code: 'R002',
+    domain: 'R',
+    domainName: 'Recreation & Leisure',
+    topicNumber: '002',
+    topicName: 'Relaxation Methods',
+    description: 'How they unwind and de-stress',
+    priority: 7,
+  },
+  {
+    code: 'R003',
+    domain: 'R',
+    domainName: 'Recreation & Leisure',
+    topicNumber: '003',
+    topicName: 'Social Recreation',
+    description: 'Leisure activities they enjoy with others',
+    priority: 6,
+  },
+  {
+    code: 'R004',
+    domain: 'R',
+    domainName: 'Recreation & Leisure',
+    topicNumber: '004',
+    topicName: 'Solo Activities',
+    description: 'Things they enjoy doing alone',
+    priority: 6,
+  },
+  {
+    code: 'R005',
+    domain: 'R',
+    domainName: 'Recreation & Leisure',
+    topicNumber: '005',
+    topicName: 'Weekend Patterns',
+    description: 'How they typically spend weekends',
+    priority: 5,
+  },
+
+  // ============================================
+  // S: Spirituality & Meaning
+  // ============================================
+  {
+    code: 'S001',
+    domain: 'S',
+    domainName: 'Spirituality & Meaning',
+    topicNumber: '001',
+    topicName: 'Spiritual Beliefs',
+    description: 'Religious or spiritual beliefs and practices',
+    priority: 7,
+  },
+  {
+    code: 'S002',
+    domain: 'S',
+    domainName: 'Spirituality & Meaning',
+    topicNumber: '002',
+    topicName: 'Life Purpose',
+    description: 'Sense of purpose, why they are here, what gives life meaning',
+    priority: 9,
+  },
+  {
+    code: 'S003',
+    domain: 'S',
+    domainName: 'Spirituality & Meaning',
+    topicNumber: '003',
+    topicName: 'Existential Views',
+    description: 'Views on death, afterlife, the nature of reality',
+    priority: 6,
+  },
+  {
+    code: 'S004',
+    domain: 'S',
+    domainName: 'Spirituality & Meaning',
+    topicNumber: '004',
+    topicName: 'Spiritual Practices',
+    description: 'Meditation, prayer, rituals, or spiritual disciplines',
+    priority: 6,
+  },
+  {
+    code: 'S005',
+    domain: 'S',
+    domainName: 'Spirituality & Meaning',
+    topicNumber: '005',
+    topicName: 'Meaning Sources',
+    description: 'Where they derive meaning - family, work, service, creation',
+    priority: 8,
+  },
+
+  // ============================================
+  // T: Technology & Digital
+  // ============================================
+  {
+    code: 'T001',
+    domain: 'T',
+    domainName: 'Technology & Digital',
+    topicNumber: '001',
+    topicName: 'Tech Relationship',
+    description: 'Overall relationship with technology - embrace or avoid',
+    priority: 6,
+  },
+  {
+    code: 'T002',
+    domain: 'T',
+    domainName: 'Technology & Digital',
+    topicNumber: '002',
+    topicName: 'Digital Habits',
+    description: 'Screen time, social media use, digital consumption patterns',
+    priority: 6,
+  },
+  {
+    code: 'T003',
+    domain: 'T',
+    domainName: 'Technology & Digital',
+    topicNumber: '003',
+    topicName: 'Online Presence',
+    description: 'Social media presence, online identity, digital footprint',
+    priority: 5,
+  },
+  {
+    code: 'T004',
+    domain: 'T',
+    domainName: 'Technology & Digital',
+    topicNumber: '004',
+    topicName: 'Tech Preferences',
+    description: 'Preferred devices, apps, platforms, and tools',
+    priority: 5,
+  },
+  {
+    code: 'T005',
+    domain: 'T',
+    domainName: 'Technology & Digital',
+    topicNumber: '005',
+    topicName: 'Digital Boundaries',
+    description: 'Limits they set around technology use, digital detox',
+    priority: 7,
+  },
+
+  // ============================================
+  // U: Uncertainties & Fears
+  // ============================================
+  {
+    code: 'U001',
+    domain: 'U',
+    domainName: 'Uncertainties & Fears',
+    topicNumber: '001',
+    topicName: 'Core Fears',
+    description: 'Deep-seated fears that influence their behavior',
+    priority: 9,
+  },
+  {
+    code: 'U002',
+    domain: 'U',
+    domainName: 'Uncertainties & Fears',
+    topicNumber: '002',
+    topicName: 'Anxieties',
+    description: 'Things that make them anxious or worried',
+    priority: 9,
+  },
+  {
+    code: 'U003',
+    domain: 'U',
+    domainName: 'Uncertainties & Fears',
+    topicNumber: '003',
+    topicName: 'Phobias',
+    description: 'Specific phobias or irrational fears',
+    priority: 6,
+  },
+  {
+    code: 'U004',
+    domain: 'U',
+    domainName: 'Uncertainties & Fears',
+    topicNumber: '004',
+    topicName: 'Worst Case Scenarios',
+    description: 'What they worry might happen, catastrophic thinking patterns',
+    priority: 7,
+  },
+  {
+    code: 'U005',
+    domain: 'U',
+    domainName: 'Uncertainties & Fears',
+    topicNumber: '005',
+    topicName: 'Insecurities',
+    description: 'Areas where they feel insecure or lack confidence',
+    priority: 8,
+  },
+
+  // ============================================
+  // V: Values & Ethics
+  // ============================================
+  {
+    code: 'V001',
+    domain: 'V',
+    domainName: 'Values & Ethics',
+    topicNumber: '001',
+    topicName: 'Moral Compass',
+    description: 'Core moral principles that guide their decisions',
+    priority: 9,
+  },
+  {
+    code: 'V002',
+    domain: 'V',
+    domainName: 'Values & Ethics',
+    topicNumber: '002',
+    topicName: 'Ethical Dilemmas',
+    description: 'How they navigate ethical gray areas',
+    priority: 7,
+  },
+  {
+    code: 'V003',
+    domain: 'V',
+    domainName: 'Values & Ethics',
+    topicNumber: '003',
+    topicName: 'Integrity',
+    description: 'How they maintain integrity and handle moral conflicts',
+    priority: 8,
+  },
+  {
+    code: 'V004',
+    domain: 'V',
+    domainName: 'Values & Ethics',
+    topicNumber: '004',
+    topicName: 'Non-Negotiables',
+    description: 'Values they will never compromise on',
+    priority: 9,
+  },
+  {
+    code: 'V005',
+    domain: 'V',
+    domainName: 'Values & Ethics',
+    topicNumber: '005',
+    topicName: 'Ethical Role Models',
+    description: 'People they admire for their ethics and values',
+    priority: 6,
+  },
+
+  // ============================================
+  // W: Work Style & Productivity
+  // ============================================
+  {
+    code: 'W001',
+    domain: 'W',
+    domainName: 'Work Style & Productivity',
+    topicNumber: '001',
+    topicName: 'Productivity Style',
+    description: 'How they work most effectively, productivity systems',
+    priority: 7,
+  },
+  {
+    code: 'W002',
+    domain: 'W',
+    domainName: 'Work Style & Productivity',
+    topicNumber: '002',
+    topicName: 'Focus Patterns',
+    description: 'When and how they focus best, attention patterns',
+    priority: 7,
+  },
+  {
+    code: 'W003',
+    domain: 'W',
+    domainName: 'Work Style & Productivity',
+    topicNumber: '003',
+    topicName: 'Procrastination',
+    description: 'Procrastination tendencies and what causes them',
+    priority: 7,
+  },
+  {
+    code: 'W004',
+    domain: 'W',
+    domainName: 'Work Style & Productivity',
+    topicNumber: '004',
+    topicName: 'Work Environment',
+    description: 'Ideal work conditions - quiet, music, coffee shop, etc.',
+    priority: 6,
+  },
+  {
+    code: 'W005',
+    domain: 'W',
+    domainName: 'Work Style & Productivity',
+    topicNumber: '005',
+    topicName: 'Energy Management',
+    description: 'How they manage energy throughout the day',
+    priority: 7,
+  },
+
+  // ============================================
+  // X: eXperiences Sought
+  // ============================================
+  {
+    code: 'X001',
+    domain: 'X',
+    domainName: 'eXperiences Sought',
+    topicNumber: '001',
+    topicName: 'Bucket List',
+    description: 'Experiences they want to have before they die',
+    priority: 7,
+  },
+  {
+    code: 'X002',
+    domain: 'X',
+    domainName: 'eXperiences Sought',
+    topicNumber: '002',
+    topicName: 'Adventures Wanted',
+    description: 'Adventurous experiences they crave',
+    priority: 6,
+  },
+  {
+    code: 'X003',
+    domain: 'X',
+    domainName: 'eXperiences Sought',
+    topicNumber: '003',
+    topicName: 'Skills to Try',
+    description: 'Skills or activities they want to experience',
+    priority: 6,
+  },
+  {
+    code: 'X004',
+    domain: 'X',
+    domainName: 'eXperiences Sought',
+    topicNumber: '004',
+    topicName: 'Places to Visit',
+    description: 'Destinations they dream of visiting',
+    priority: 6,
+  },
+  {
+    code: 'X005',
+    domain: 'X',
+    domainName: 'eXperiences Sought',
+    topicNumber: '005',
+    topicName: 'Life Experiments',
+    description: 'Things they want to try or experiment with in life',
+    priority: 6,
+  },
+
+  // ============================================
+  // Y: Yearnings & Desires
+  // ============================================
+  {
+    code: 'Y001',
+    domain: 'Y',
+    domainName: 'Yearnings & Desires',
+    topicNumber: '001',
+    topicName: 'Deep Desires',
+    description: 'Fundamental desires that drive their life',
+    priority: 9,
+  },
+  {
+    code: 'Y002',
+    domain: 'Y',
+    domainName: 'Yearnings & Desires',
+    topicNumber: '002',
+    topicName: 'Unfulfilled Wishes',
+    description: 'Things they wish for but haven\'t achieved',
+    priority: 8,
+  },
+  {
+    code: 'Y003',
+    domain: 'Y',
+    domainName: 'Yearnings & Desires',
+    topicNumber: '003',
+    topicName: 'Secret Wants',
+    description: 'Desires they may not openly share',
+    priority: 7,
+  },
+  {
+    code: 'Y004',
+    domain: 'Y',
+    domainName: 'Yearnings & Desires',
+    topicNumber: '004',
+    topicName: 'Romantic Yearnings',
+    description: 'Desires related to love and romantic connection',
+    priority: 8,
+  },
+  {
+    code: 'Y005',
+    domain: 'Y',
+    domainName: 'Yearnings & Desires',
+    topicNumber: '005',
+    topicName: 'Lifestyle Desires',
+    description: 'The life they wish they were living',
+    priority: 7,
+  },
+
+  // ============================================
+  // Z: Zones of Comfort
+  // ============================================
+  {
+    code: 'Z001',
+    domain: 'Z',
+    domainName: 'Zones of Comfort',
+    topicNumber: '001',
+    topicName: 'Safe Spaces',
+    description: 'Physical and emotional spaces where they feel safest',
+    priority: 8,
+  },
+  {
+    code: 'Z002',
+    domain: 'Z',
+    domainName: 'Zones of Comfort',
+    topicNumber: '002',
+    topicName: 'Comfort Activities',
+    description: 'Activities that bring comfort when stressed or upset',
+    priority: 8,
+  },
+  {
+    code: 'Z003',
+    domain: 'Z',
+    domainName: 'Zones of Comfort',
+    topicNumber: '003',
+    topicName: 'Comfort People',
+    description: 'People they turn to for comfort and security',
+    priority: 8,
+  },
+  {
+    code: 'Z004',
+    domain: 'Z',
+    domainName: 'Zones of Comfort',
+    topicNumber: '004',
+    topicName: 'Security Needs',
+    description: 'What they need to feel secure and stable',
+    priority: 8,
+  },
+  {
+    code: 'Z005',
+    domain: 'Z',
+    domainName: 'Zones of Comfort',
+    topicNumber: '005',
+    topicName: 'Grounding Practices',
+    description: 'What grounds them when feeling overwhelmed',
+    priority: 8,
   },
 ];
 
